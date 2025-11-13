@@ -71,43 +71,8 @@ local redeemprev = '{s:0.75}Also redeems {C:attention,s:0.75}previous tier for f
 
 local CFG = SMODS.current_mod.config
 
-function G.FUNCS.init_flames(e)
-    for k, v in next, G.flame_objects_def do
-        -- ALMANAC PATCH: Fix for Cartomancer incompatibility
-        local w = v.w or 18
-        local h = v.h or 36
-        local atlas = v.atlas or 'ui_1'
-        local atlas_obj = G.ASSET_ATLAS[atlas]
-        if not atlas_obj then
-            print_stack('ALMANAC_PATCH: Missing atlas '..atlas..' in init_flames')
-            atlas_obj = G.ASSET_ATLAS['ui_1'] -- fallback
-            w = 18
-            h = 18
-        end
-        -- End patch
-        G.flame_objects[k] = UIBox({
-            config = {
-                object = Sprite(0, 0, w, h, atlas_obj, {x = v.x, y = v.y}), -- Patched
-                colour = v.colour,
-                id = v.id,
-                func = 'flame_handler',
-                h = 0,
-                w = 0,
-                no_role = true
-            }
-        })
-        G.flame_objects[k].config.object:set_scale(0.01, 0.01)
-        G.flame_objects[k].config.object:set_animation(v.anim, v.anim_r, v.anim_f)
-        G.flame_objects[k].config.object.ARGS = G.ARGS[v.arg_tab]
-        if G.hand_text_area[v.id] then
-            G.hand_text_area[v.id]:add_child(G.flame_objects[k])
-        end
-    end
-end
-
 -- Initialize safety systems from ported lovely.toml patches
 local function init_jen_safety_systems()
-    if jl and jl.install_runtime_patches then jl.install_runtime_patches() end
     -- Set up global lvcol function for Cryptid compatibility
     if not _G.lvcol then
         _G.lvcol = jl.lvcol
@@ -122,60 +87,6 @@ local function init_jen_safety_systems()
     -- Initialize Gateway destruction flag for "The Saint" protection
     if G and G.GAME then
         G.GAME.gateway_destroying_jokers = false
-    end
-
-    -- Ensure flame handler sprite dimensions are populated for updated Steamodded builds
-    if G and G.FUNCS and G.FUNCS.flame_handler and not Jen._wrapped_flame_handler then
-        Jen._wrapped_flame_handler = true
-        local _orig_flame_handler = G.FUNCS.flame_handler
-        
-        local function resolve_size(e)
-            if not (e and e.config) then return end
-            local cfg = e.config
-            local parent_t = e.parent and e.parent.T or nil
-            local self_t = e.T
-            local sprite = e.config.object and e.config.object:is(Sprite) and e.config.object or nil
-            local sprite_t = sprite and sprite.T or nil
-
-            local function pick_size(primary, secondary, fallback)
-                if type(primary) == 'number' and primary > 0 then return primary end
-                if type(secondary) == 'number' and secondary > 0 then return secondary end
-                if type(fallback) == 'number' and fallback > 0 then return fallback end
-                return nil
-            end
-            -- Priority:
-            -- 1. cfg.w (if user explicitly set it on UIBox config)
-            -- 2. sprite_t.w (the sprite's *actual* width, from init_flames)
-            -- 3. parent_t.w (the "box" - this is the fallback that fixes the crash)
-            -- 4. G.CARD_W (failsafe)
-            cfg._w = pick_size(cfg.w, sprite_t and sprite_t.w, nil)
-                or pick_size(parent_t and parent_t.w, G and G.CARD_W, nil)
-                or 18 -- Hard fallback
-            cfg._h = pick_size(cfg.h, sprite_t and sprite_t.h, nil)
-                or pick_size(parent_t and parent_t.h, G and G.CARD_H, nil)
-                or cfg._w
-            if cfg._w <= 0 then cfg._w = 18 end
-            if cfg._h <= 0 then cfg._h = cfg._w end
-        end
-
-        G.FUNCS.flame_handler = function(e, ...)
-            resolve_size(e)
-            local result = _orig_flame_handler(e, ...)
-            resolve_size(e)
-            if e and e.config and e.config.object and e.config.object:is(Sprite) then
-                local sprite = e.config.object
-                local target_w = e.config._w or sprite.T.w or 1
-                local target_h = e.config._h or sprite.T.h or target_w
-                if target_w <= 0 then target_w = 1 end
-                if target_h <= 0 then target_h = target_w end
-                if math.abs((sprite.T.w or 0) - target_w) > 1e-3 or math.abs((sprite.T.h or 0) - target_h) > 1e-3 then
-                    sprite:hard_set_T(sprite.T.x or 0, sprite.T.y or 0, target_w, target_h)
-                    sprite.VT.w = target_w
-                    sprite.VT.h = target_h
-                end
-            end
-            return result
-        end
     end
 
     -- Install highlight guard (avoid highlighting non-play cards when extra scoring areas are active)
@@ -364,13 +275,208 @@ SMODS.Atlas {
 	py = 34
 }
 
--- Load leveling tables from data file (suit and rank leveling)
-local _jen_leveling = (SMODS.load_file and SMODS.load_file('data/leveling.lua') or function() return function() return {suit_leveling = {}, rank_leveling = {}} end end)()
-
 Jen = {
-	fusions = (SMODS.load_file and SMODS.load_file('data/fusions.lua') or function() return function() return {} end end)(),
-	overpowered_rarities = (SMODS.load_file and SMODS.load_file('data/overpowered_rarities.lua') or function() return function() return {} end end)(),
-	locale_colours = (SMODS.load_file and SMODS.load_file('data/locale_colours.lua') or function() return function() return {} end end)(),
+	fusions = {
+		['Mutate Leshy'] = {
+			cost = 50,
+			output = 'j_jen_pawn',
+			ingredients = {
+				'j_jen_leshy',
+				'j_jen_godsmarble'
+			}
+		},
+		['Mutate Heket'] = {
+			cost = 50,
+			output = 'j_jen_knight',
+			ingredients = {
+				'j_jen_heket',
+				'j_jen_godsmarble'
+			}
+		},
+		['Mutate Kallamar'] = {
+			cost = 50,
+			output = 'j_jen_jester',
+			ingredients = {
+				'j_jen_kallamar',
+				'j_jen_godsmarble'
+			}
+		},
+		['Mutate Shamura'] = {
+			cost = 50,
+			output = 'j_jen_arachnid',
+			ingredients = {
+				'j_jen_shamura',
+				'j_jen_godsmarble'
+			}
+		},
+		['Mutate Lambert'] = {
+			cost = 50,
+			output = 'j_jen_reign',
+			ingredients = {
+				'j_jen_lambert',
+				'j_jen_godsmarble'
+			}
+		},
+		['Mutate Narinder'] = {
+			cost = 50,
+			output = 'j_jen_feline',
+			ingredients = {
+				'j_jen_narinder',
+				'j_jen_godsmarble'
+			}
+		},
+		['A M A L G A M A T E'] = {
+			cost = 1e100,
+			output = 'j_jen_amalgam',
+			ingredients = {
+				'j_jen_pawn',
+				'j_jen_knight',
+				'j_jen_jester',
+				'j_jen_arachnid',
+				'j_jen_reign',
+				'j_jen_feline',
+				'j_jen_sigil'
+			}
+		},
+		['Mutate Clauneck'] = {
+			cost = 50,
+			output = 'j_jen_fateeater',
+			ingredients = {
+				'j_jen_clauneck',
+				'j_jen_godsmarble'
+			}
+		},
+		['Mutate Kudaai'] = {
+			cost = 50,
+			output = 'j_jen_foundry',
+			ingredients = {
+				'j_jen_kudaai',
+				'j_jen_godsmarble'
+			}
+		},
+		['Mutate Chemach'] = {
+			cost = 50,
+			output = 'j_jen_broken',
+			ingredients = {
+				'j_jen_chemach',
+				'j_jen_godsmarble'
+			}
+		},
+		['Mutate Aster Flynn'] = {
+			cost = 5e3,
+			output = 'j_jen_astrophage',
+			ingredients = {
+				'j_jen_aster',
+				'j_jen_godsmarble'
+			}
+		},
+		['Empower Landa Veris'] = {
+			cost = 1e4,
+			output = 'j_jen_bulwark',
+			ingredients = {
+				'j_jen_landa',
+				'j_jen_godsmarble'
+			}
+		},
+		['Corrupt Crimbo'] = {
+			cost = 250,
+			output = 'j_jen_faceless',
+			ingredients = {
+				'j_jen_crimbo',
+				'j_jen_godsmarble'
+			}
+		},
+		['Corrupt Alice'] = {
+			cost = 5e3	,
+			output = 'j_jen_nexus',
+			ingredients = {
+				'j_jen_alice',
+				'j_jen_godsmarble'
+			}
+		},
+		['Corrupt Nyx'] = {
+			cost = 1e3,
+			output = 'j_jen_paragon',
+			ingredients = {
+				'j_jen_nyx',
+				'j_jen_godsmarble'
+			}
+		},
+		['Possess Oxy'] = {
+			cost = 3e3,
+			output = 'j_jen_inhabited',
+			ingredients = {
+				'j_jen_oxy',
+				'j_jen_godsmarble'
+			}
+		},
+		['Petrify Honey'] = {
+			cost = 50,
+			output = 'j_jen_cracked',
+			ingredients = {
+				'j_jen_honey',
+				'j_jen_godsmarble'
+			}
+		},
+		['Immolate Maxie'] = {
+			cost = 2e3,
+			output = 'j_jen_charred',
+			ingredients = {
+				'j_jen_maxie',
+				'j_jen_godsmarble'
+			}
+		},
+		['Empower Jen'] = {
+			cost = 1e4,
+			output = 'j_jen_wondergeist',
+			ingredients = {
+				'j_jen_jen',
+				'j_jen_godsmarble'
+			}
+		},
+		['Empower Jen (2nd Pass)'] = {
+			cost = 1e6,
+			output = 'j_jen_wondergeist2',
+			ingredients = {
+				'j_jen_wondergeist',
+				'j_jen_godsmarble'
+			}
+		},
+		['???'] = {
+			cost = 1e100,
+			output = 'c_jen_soul_omega',
+			ingredients = {
+				'c_soul',
+				'c_black_hole',
+				'c_jen_black_hole_omega',
+				'c_cry_white_hole',
+				'j_jen_godsmarble'
+			}
+		}
+	},
+	overpowered_rarities = {
+		'jen_wondrous',
+		'jen_extraordinary',
+		'jen_ritualistic',
+		'jen_transcendent',
+		'jen_omegatranscendent',
+		'jen_omnipotent',
+		'jen_miscellaneous',
+		'jen_junk'
+	},
+	locale_colours = {
+		pink = 'FFAAD9',
+		fuchsia = 'FF00B0',
+		caramel = 'FFC14F',
+		pastel_yellow = 'FFFC75',
+		stone = '7A8087',
+		darkstone = '53575B',
+		lore = '9E2A9F',
+		caption = '009A9A',
+		uno = 'FF0000',
+		almanac = '0000FF',
+		blood = '880808'
+	},
 	config = {
 		texture_pack = 'default',
 		show_credits = true,
@@ -382,8 +488,78 @@ Jen = {
 			decrement = 0.04,
 			retrigger_mod = 2
 		},
-		suit_leveling = _jen_leveling.suit_leveling,
-		rank_leveling = _jen_leveling.rank_leveling,
+		suit_leveling = {
+			Hearts = {
+				chips = 1,
+				mult = 5
+			},
+			Clubs = {
+				chips = 5,
+				mult = 1
+			},
+			Diamonds = {
+				chips = 2,
+				mult = 4
+			},
+			Spades = {
+				chips = 4,
+				mult = 2
+			}
+		},
+		rank_leveling = {
+			['2'] = {
+				chips = 13,
+				mult = 1
+			},
+			['3'] = {
+				chips = 12,
+				mult = 1
+			},
+			['4'] = {
+				chips = 11,
+				mult = 1
+			},
+			['5'] = {
+				chips = 10,
+				mult = 2
+			},
+			['6'] = {
+				chips = 9,
+				mult = 2
+			},
+			['7'] = {
+				chips = 8,
+				mult = 2
+			},
+			['8'] = {
+				chips = 7,
+				mult = 3
+			},
+			['9'] = {
+				chips = 6,
+				mult = 3
+			},
+			['10'] = {
+				chips = 5,
+				mult = 3
+			},
+			Jack = {
+				chips = 4,
+				mult = 4
+			},
+			Queen = {
+				chips = 3,
+				mult = 5
+			},
+			King = {
+				chips = 2,
+				mult = 6
+			},
+			Ace = {
+				chips = 25,
+				mult = 7
+			},
+		},
 		wondrous_music = CFG.wondrous,
 		extraordinary_music = CFG.extraordinary,
 		save_compression_level = 9,
@@ -423,7 +599,15 @@ Jen = {
 		scalar_increment = .13,
 		scalar_additivedivisor = 50,
 		scalar_exponent = 1,
-		straddle = (SMODS.load_file and SMODS.load_file('data/straddle.lua') or function() return function() return {enabled = CFG and CFG.straddle} end end)(),
+		straddle = {
+			enabled = CFG.straddle,
+			acceleration = true,
+			skip_animation = false,
+			backwards_mod = 2,
+			progress_min = 3,
+			progress_max = 7,
+			progress_increment = 10
+		},
 		wondrous_music = CFG.wondrous,
 		--[[
 			Some cards/items while Almanac is installed are banned for at least one reason.
@@ -446,8 +630,58 @@ Jen = {
 			If you want to remove all bans; it's better to change the boolean below this text ("disable_bans") to true.
 		]]
 		disable_bans = CFG.disable_bans,
-		bans = (SMODS.load_file and SMODS.load_file('data/bans.lua') or function() return function() return {} end end)(),
-		
+		bans = {
+			--'example_of_commented_out_ban',
+			'!j_cry_chocolate_dice',
+			'!j_cry_curse_sob',
+			'!j_cry_filler',
+			'j_mf_colorem',
+			'betm_jokers_j_balatro_mobile',
+			'betm_jokers_j_gameplay_update',
+			'betm_jokers_j_friends_of_jimbo',
+			'c_ortalab_lot_hand',
+			'j_cry_pity_prize',
+			'j_cry_formidiulosus',
+			'j_cry_oil_lamp', --I don't want it, keep it my friend
+			'j_cry_tropical_smoothie',
+			'!j_cry_jawbreaker',
+			'j_cry_necromancer',
+			'j_cry_mask',
+			'j_cry_exposed',
+			'j_cry_equilib',
+			'j_cry_error',
+			'j_cry_ghost',
+			'j_cry_spy',
+			'j_cry_copypaste',
+			'j_cry_flip_side',
+			'j_cry_crustulum', --crusty shit
+			'j_sdm_cupidon',
+			'j_sdm_0',
+			'p_mupack_favoritepack',
+			'c_prism_spectral_djinn',
+			'e_cry_double_sided',
+			'c_cry_meld',
+			'c_cry_crash',
+			'c_cry_rework',
+			'c_cry_multiply',
+			'c_cry_ctrl_v',
+			'c_cry_ritual',
+			'c_cry_adversary',
+			'c_cry_chambered',
+			'v_cry_double_down',
+			'v_cry_double_slit',
+			'v_cry_double_vision',
+			'v_cry_curate',
+			'e_cry_fragile',
+			'bl_cruel_daring',
+			'bl_cruel_reach',
+			'bl_cry_obsidian_orb',
+			'b_cry_e_deck',
+			'b_cry_et_deck',
+			'b_cry_sk_deck',
+			'b_cry_st_deck',
+			'b_cry_sl_deck',
+		}
 	}
 }
 
@@ -504,8 +738,6 @@ if Jen.config.HQ_vanillashaders then
     G.SHADERS['flame'] = love.graphics.newShader(flame_shader)
 end
 
-local jen_modifierbadges = (SMODS.load_file and SMODS.load_file('data/ui_badges.lua') or function() return function() return {} end end)()
---[[
 local jen_modifierbadges = {
 	unique = {
 		text = {
@@ -588,7 +820,6 @@ local jen_modifierbadges = {
 		tcol = G.C.SECONDARY_SET.Planet
 	}
 }
-]]
 
 local evalcard_ref = eval_card
 function eval_card(card, context)
@@ -737,7 +968,70 @@ function SMODS.create_mod_badges(obj, badges)
 	end
 end
 
--- Roman helpers moved to JenLib jl.roman/jl.unroman
+--https://gist.github.com/efrederickson/4080372
+local map = { 
+    I = 1,
+    V = 5,
+    X = 10,
+    L = 50,
+    C = 100, 
+    D = 500, 
+    M = 1000,
+}
+local numbers_roman = { 1, 5, 10, 50, 100, 500, 1000 }
+local chars_roman = { "I", "V", "X", "L", "C", "D", "M" }
+function roman(s)
+    s = tonumber(s)
+    if not s or s ~= s then error"Unable to convert to number" end
+    if s == math.huge then error"Unable to convert infinity" end
+    s = math.floor(s)
+    if s <= 0 then return s end
+	local ret = ""
+        for i = #numbers_roman, 1, -1 do
+        local num = numbers_roman[i]
+        while s - num >= 0 and s > 0 do
+            ret = ret .. chars_roman[i]
+            s = s - num
+        end
+        --for j = i - 1, 1, -1 do
+        for j = 1, i - 1 do
+            local n2 = numbers_roman[j]
+            if s - (num - n2) >= 0 and s < num and s > 0 and num - n2 ~= n2 then
+                ret = ret .. chars_roman[j] .. chars_roman[i]
+                s = s - (num - n2)
+                break
+            end
+        end
+    end
+    return ret
+end
+function unroman(s)
+    s = s:upper()
+    local ret = 0
+    local i = 1
+    while i <= s:len() do
+        local c = s:sub(i, i)
+        if c ~= " " then
+            local m = map[c] or error("Unknown Roman Numeral '" .. c .. "'")
+            
+            local next = s:sub(i + 1, i + 1)
+            local nextm = map[next]
+            
+            if next and nextm then
+                if nextm > m then 
+                    ret = ret + (nextm - m)
+                    i = i + 1
+                else
+                    ret = ret + m
+                end
+            else
+                ret = ret + m
+            end
+        end
+        i = i + 1
+    end
+    return ret
+end
 
 function start_straddle()
 	if Jen.config.straddle.enabled then
@@ -833,7 +1127,27 @@ function Card:speak(text, col)
 	card_eval_status_text(self, 'extra', nil, nil, nil, {message = text, colour = col or G.C.FILTER})
 end
 
-local random_editions = (SMODS.load_file and SMODS.load_file('data/random_editions.lua') or function() return function() return {} end end)()
+local random_editions = {
+	'foil',
+	'holo',
+	'polychrome',
+	'jen_chromatic',
+	'jen_polygloss',
+	'jen_gilded',
+	'jen_sequin',
+	'jen_laminated',
+	'jen_ink',
+	'jen_prismatic',
+	'jen_watered',
+	'jen_sepia',
+	'jen_reversed',
+	'jen_diplopia',
+	'cry_gold',
+	'cry_mosaic',
+	'cry_oversat',
+	'cry_astral',
+	'cry_blur'
+}
 
 local card_draw_ref = Card.draw
 function Card:draw(layer)
@@ -1248,7 +1562,17 @@ local function play_sound_q(sound, per, vol)
 	}))
 end
 
-local final_operations = (SMODS.load_file and SMODS.load_file('data/final_operations.lua') or function() return function() return {} end end)()
+local final_operations = {
+	[-2] = {'/', 'IMPORTANT'},
+	[-1] = {'-', 'GREY'},
+	[0] = {'+', 'UI_CHIPS'},
+	[1] = {'X', 'UI_MULT'},
+	[2] = {'^', {0.8, 0.45, 0.85, 1}},
+	[3] = {'^^', 'DARK_EDITION'},
+	[4] = {'^^^', 'CRY_EXOTIC'},
+	[5] = {'^^^^', 'CRY_EMBER'},
+	[6] = {'^^^^^', 'CRY_ASCENDANT'},
+}
 
 local sumcache_limit = 100
 
@@ -1292,6 +1616,7 @@ function get_chipmult_sum(chips, mult)
 end
 
 function update_operator_display()
+	if not G.hand_text_area or not G.hand_text_area.op then return end
 	local op = get_final_operator()
 	local txt = ''
 	local col = G.C.WHITE
@@ -19914,7 +20239,7 @@ for k, v in pairs(vchrs) do
 			SMODS.Voucher {
 				key = k .. (i == 13 and '_omega' or i),
 				loc_txt = {
-					name = v.n .. ' ' .. (i == 13 and 'Omega' or jl.roman(i)),
+					name = v.n .. ' ' .. (i == 13 and 'Omega' or roman(i)),
 					text = v.tiers_desc[i]
 				},
 				pos = { x = 0, y = i == 13 and 14 or 0 },
@@ -20476,71 +20801,6 @@ function update_hand_text(config, vals)
 			end
 		end
 	end
-	-- Custom StatusText rendering with color/scale mapping; suppress base duplication
-	local cfg = config or {}
-	local v = vals or {}
-	if v.StatusText then
-		G.E_MANAGER:add_event(Event({
-			trigger = 'before',
-			blockable = not cfg.immediate,
-			delay = cfg.delay or 0.8,
-			func = function()
-				local function map_and_show(kind)
-					local cur = (G.GAME and G.GAME.current_round and G.GAME.current_round.current_hand and G.GAME.current_round.current_hand[kind])
-					local newv = v[kind]
-					if newv == nil then return end
-					if cur == newv then return end
-					local col = G.C.GREEN
-					local delta
-					if type(newv) == 'string' then
-						delta = newv
-					else
-						local d = (is_number(newv) and is_number(cur)) and (to_big(newv) - to_big(cur)) or to_big(0)
-						if to_big(d) < to_big(0) then delta = number_format(d); col = G.C.RED
-						elseif to_big(d) > to_big(0) then delta = '+'..number_format(d)
-						else delta = number_format(d) end
-					end
-					if v.notifcol then
-						col = v.notifcol
-					else
-						if string.find(delta, '{', 1, true) and string.find(delta, '}', 1, true) then
-							col = G.C.jen_RGB
-						elseif string.find(delta, '^^^', 1, true) then
-							col = G.C.CRY_ASCENDANT
-						elseif string.find(delta, '^^', 1, true) then
-							col = G.C.CRY_VERDANT
-						elseif string.find(delta, '^', 1, true) then
-							col = G.C.SECONDARY_SET.Tarot
-						elseif string.find(delta, 'X', 1, true) or string.find(delta, 'x', 1, true) then
-							col = G.C.FILTER
-						elseif string.find(delta, '=', 1, true) then
-							col = G.C.GOLD
-						end
-					end
-					local cover = (kind == 'chips') and G.hand_text_area.chips.parent or G.hand_text_area.mult.parent
-					local base_col = (kind == 'chips') and G.C.CHIPS or G.C.MULT
-					local align = (kind == 'chips') and 'cr' or 'cl'
-					attention_text({
-						text = delta,
-						scale = 0.4 / (math.max(1, string.len(delta) - 20) ^ .1),
-						hold = 1,
-						cover = cover,
-						cover_colour = mix_colours(base_col, col, 0.3),
-						emboss = 0.05,
-						align = 'cm',
-						cover_align = align
-					})
-				end
-				map_and_show('chips')
-				map_and_show('mult')
-				return true
-			end
-		}))
-		local vals2 = {}
-		for k, vv in pairs(v) do vals2[k] = vv end
-		vals2.StatusText = nil
-		return uhtr(cfg, vals2)
-	end
 	uhtr(config, vals)
 end
 
@@ -20998,6 +21258,7 @@ function CardArea:add_to_highlighted(card, silent)
 	athr(self,card,silent)
 end
 
+
 local csar = Card.set_ability
 function Card:set_ability(center, initial, delay_sprites)
 	if self and self.gc then
@@ -21019,20 +21280,20 @@ end
 -- BOOSTERS
 local guiduasbr = G.UIDEF.use_and_sell_buttons
 function G.UIDEF.use_and_sell_buttons(card)
-	if (card.area == G.pack_cards and G.pack_cards) and card.ability.consumeable then
+	if (card.was_in_pack_area and G.pack_cards) and card.ability.consumeable then
 		local cen = card.gc and card:gc()
 		if cen and ((Jen.hv('reserve', 1) and cen.set == 'Planet') or (Jen.hv('reserve', 2) and cen.set == 'Tarot') or (Jen.hv('reserve', 3) and cen.set == 'Spectral')) then
 			return {
-				n = G.UIT.ROOT,
-				config = { padding = -0.1, colour = G.C.CLEAR },
+				n = G.UIT.C,
+				config = {align = "bm", padding = 0, colour = G.C.CLEAR},
 				nodes = {
 					{
 						n = G.UIT.R,
 						config = {
 							ref_table = card,
+							align = "cm",
 							r = 0.08,
 							padding = 0.1,
-							align = "bm",
 							minw = 0.5 * card.T.w - 0.15,
 							minh = 0.7 * card.T.h,
 							maxw = 0.7 * card.T.w - 0.15,
@@ -21059,9 +21320,9 @@ function G.UIDEF.use_and_sell_buttons(card)
 						n = G.UIT.R,
 						config = {
 							ref_table = card,
+							align = "cm",
 							r = 0.08,
 							padding = 0.1,
-							align = "bm",
 							minw = 0.5 * card.T.w - 0.15,
 							maxw = 0.9 * card.T.w - 0.15,
 							minh = 0.1 * card.T.h,
@@ -21084,10 +21345,6 @@ function G.UIDEF.use_and_sell_buttons(card)
 							},
 						},
 					},
-					{ n = G.UIT.R, config = { align = "bm", w = 7.7 * card.T.w } },
-					{ n = G.UIT.R, config = { align = "bm", w = 7.7 * card.T.w } },
-					{ n = G.UIT.R, config = { align = "bm", w = 7.7 * card.T.w } },
-					{ n = G.UIT.R, config = { align = "bm", w = 7.7 * card.T.w } }
 				},
 			}
 		end

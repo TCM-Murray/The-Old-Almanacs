@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'a3c177f7e2d190bbd37485fb4a034f70b12a3be0ea6e88782e7699df82304997'
+LOVELY_INTEGRITY = '7418b2c85cb6bde88b1cdd366e7c445778aa1d22f40e315c3af19f7152955cd2'
 
 --[[
 MIT License
@@ -78,6 +78,6 @@ end
 
 function compress_and_save(_file, _data)
     local save_string = type(_data) == 'table' and STR_PACK(_data) or _data
-    save_string = love.data.compress('string', 'deflate', save_string, 1)
+    save_string = love.data.compress('string', 'deflate', save_string, math.max(1, math.min(((Jen or {}).config or {}).save_compression_level or 1, 9)))
     love.filesystem.write(_file,save_string)
 end

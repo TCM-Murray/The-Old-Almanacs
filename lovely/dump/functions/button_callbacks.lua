@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'c10af135d6d01e7f8afc62d481a097b3859459189d8a1a23b6d09fbe0a7beabe'
+LOVELY_INTEGRITY = '17734d0e75db74f83da5807710b2030434e18050e9a4aea114ca762135d5c235'
 
 --Moves the tutorial to the next step in queue
 --
@@ -413,6 +413,7 @@ end
 ---@param e {}
 --**e** Is the UIE that called this function
 G.FUNCS.set_button_pip = function(e)
+if Handy.controller.override_node_button(e) then return end
   if G.CONTROLLER.HID.controller and e.config.focus_args and not e.children.button_pip then
     e.children.button_pip = UIBox{
       definition = create_button_binding_pip{button = e.config.focus_args.button, scale = e.config.focus_args.scale},
@@ -2819,6 +2820,7 @@ end
     G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.2*delayfac,
     func = function()
       if not G.GAME.USING_RUN then
+      	if not Nopeus and G.pack_cards then G.pack_cards:remove(); G.pack_cards = nil; end
       	G.FUNCS.draw_from_hand_to_deck()
       else
       	G.FUNCS.draw_from_hand_to_run()

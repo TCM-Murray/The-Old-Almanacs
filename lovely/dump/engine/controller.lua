@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '3175cafc7c1140004d309f5533f51b071f9e7719550cfaa7b7a46f474658fd1a'
+LOVELY_INTEGRITY = '6065641fcd60825c20b72702ed25821ebfcace6cf5e3cb59b15077335ad6d120'
 
 ---@class Controller
 Controller = Object:extend()
@@ -592,6 +592,10 @@ function Controller:update_axis(dt)
         ---------------------------------------------------------------
         local l_stick_x = self.GAMEPAD.object:getGamepadAxis('leftx')
         local l_stick_y = self.GAMEPAD.object:getGamepadAxis('lefty')
+        if Handy.controller.is_module_enabled(Handy.cc.swap_controller_cursor_stick) then
+            l_stick_x = self.GAMEPAD.object:getGamepadAxis('rightx')
+            l_stick_y = self.GAMEPAD.object:getGamepadAxis('righty')
+        end
         --If there is something being dragged, we want to treat the left stick as a cursor input
         if self.dragging.target and math.abs(l_stick_x) + math.abs(l_stick_y) > 0.1 then 
             axis_interpretation = 'axis_cursor' --There is some cursor movement
@@ -630,6 +634,10 @@ function Controller:update_axis(dt)
         ---------------------------------------------------------------
         local r_stick_x = self.GAMEPAD.object:getGamepadAxis('rightx')
         local r_stick_y = self.GAMEPAD.object:getGamepadAxis('righty')
+        if Handy.controller.is_module_enabled(Handy.cc.swap_controller_cursor_stick) then
+            r_stick_x = self.GAMEPAD.object:getGamepadAxis('leftx')
+            r_stick_y = self.GAMEPAD.object:getGamepadAxis('lefty')
+        end
         G.DEADZONE = 0.2
         local mag = math.sqrt(math.abs(r_stick_x)^2 + math.abs(r_stick_y)^2)
         if mag > G.DEADZONE then 
@@ -894,7 +902,8 @@ function Controller:key_press_update(key, dt)
         end
         if key == 'b' then
             G:delete_run()
-            G:start_run({})
+            Galdur.prepare_run_setup()
+            G.FUNCS.start_run(nil, Galdur.run_setup.choices)
         end
         if key == 'l' then
             G:delete_run()
@@ -951,7 +960,8 @@ function Controller:key_hold_update(key, dt)
         end
     end
 end
-if key == "r" and not G.SETTINGS.paused and not (G.GAME and G.GAME.USING_CODE) then
+if key == "r" and not G.SETTINGS.paused or (key == "r" and Handy.__restart_from_game_over)
+ and not (G.GAME and G.GAME.USING_CODE) then
             if self.held_key_times[key] > 0.7 then
                 if not G.GAME.won and not G.GAME.seeded and not G.GAME.challenge then 
                     G.PROFILES[G.SETTINGS.profile].high_scores.current_streak.amt = 0
@@ -962,6 +972,9 @@ if key == "r" and not G.SETTINGS.paused and not (G.GAME and G.GAME.USING_CODE) t
                 G.GAME.viewed_back = nil
                 G.run_setup_seed = G.GAME.seeded
                 G.challenge_tab = G.GAME and G.GAME.challenge and G.GAME.challenge_tab or nil
+                if type(G.challenge_tab) == "string" and G.GAME and G.GAME.challenge then
+                    G.challenge_tab = G.CHALLENGES[get_challenge_int_from_id(G.GAME.challenge or '') or ''] or {name = 'ERROR'}
+                end
                 G.forced_seed, G.setup_seed = nil, nil
                 if G.GAME.seeded then G.forced_seed = G.GAME.pseudorandom.seed end
                 G.forced_stake = G.GAME.stake

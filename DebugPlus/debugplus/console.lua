@@ -3,6 +3,7 @@ local utf8 = require("utf8")
 local watcher = require("debugplus.watcher")
 local config = require("debugplus.config")
 local logger = require("debugplus.logger")
+local ui = require "debugplus.ui"
 
 local global = {}
 
@@ -395,10 +396,40 @@ commands = {{
         end
     end
 }}
-local inputText = ""
+local input = ui.TextInput.new(0)
+
+local function loadHistory()
+    if not config.getValue("commandHistory") then return end
+    local content = love.filesystem.read("config/DebugPlus.history.jkr")
+    if not content then
+        return
+    end
+    local t = {}
+    for str in string.gmatch(content, "([^\n\r]+)") do
+        table.insert(history, 1, util.unescapeSimple(str))
+    end
+end
+
+local function saveHistory()
+    local max = config.getValue("commandHistoryMax")
+    local str = ""
+    for i = math.min(#history, max), 1, -1 do
+        if str ~= "" then str = str .. "\n" end
+        str = str .. util.escapeSimple(history[i])
+    end
+    love.filesystem.write("config/DebugPlus.history.jkr", str)
+end
+
+local function closeConsole()
+    input:clear()
+    consoleOpen = false
+    love.keyboard.setKeyRepeat(gameKeyRepeat)
+    love.keyboard.setTextInput(gameTextInput)
+
+end
 
 local function runCommand()
-    inputText = util.trim(inputText)
+    local inputText = util.trim(input:toString())
     if inputText == "" then
         return
     end
@@ -408,6 +439,10 @@ local function runCommand()
         table.insert(history, 1, inputText)
     end
 
+    if config.getValue("commandHistory") then
+        saveHistory()
+    end
+
     local cmdName = string.lower(string.gsub(inputText, "^(%S+).*", "%1"))
     local rawArgs = string.gsub(inputText, "^%S+%s*(.*)", "%1")
     local args = {}
@@ -415,10 +450,7 @@ local function runCommand()
         table.insert(args, w)
     end
 
-    inputText = ""
-    consoleOpen = false
-    love.keyboard.setKeyRepeat(gameKeyRepeat)
-    love.keyboard.setTextInput(gameTextInput)
+    closeConsole()
 
     local cmd
     for i, c in ipairs(commands) do
@@ -457,11 +489,12 @@ local function runCommand()
     end
 end
 
-function global.consoleHandleKey(key)
+local orig_keypressed
+local function consoleHandleKey(key, scancode, isrepeat)
     if not consoleOpen then
         local toCheck = key
         if love.keyboard.getScancodeFromKey("/") == "unknown" then
-            toCheck = love.keyboard.getScancodeFromKey(key)
+            toCheck = scancode
         end
         if toCheck == '/' or toCheck == 'kp/' then
             if util.isShiftDown() then
@@ -470,37 +503,26 @@ function global.consoleHandleKey(key)
                 openNextFrame = true -- This is to prevent the keyboard handler from typing this key
             end
         end
+        if orig_keypressed then
+            return orig_keypressed(key, scancode, isrepeat)
+        end
         return true
     end
 
     if key == "escape" then
-        consoleOpen = false
-        love.keyboard.setKeyRepeat(gameKeyRepeat)
-        love.keyboard.setTextInput(gameTextInput)
-        inputText = ""
-    end
-    -- This bit stolen from https://love2d.org/wiki/love.textinput
-    if key == "backspace" then
-        -- get the byte offset to the last UTF-8 character in the string.
-        local byteoffset = utf8.offset(inputText, -1)
-
-        if byteoffset then
-            -- remove the last UTF-8 character.
-            -- string.sub operates on bytes rather than UTF-8 characters, so we couldn't do string.sub(text, 1, -2).
-            inputText = string.sub(inputText, 1, byteoffset - 1)
-        end
+        closeConsole()
     end
 
     if key == "return" then
         if util.isShiftDown() then
-            inputText = inputText .. "\n"
+            input:textinput("\n")
         else
             runCommand()
         end
     end
 
     if key == "v" and util.isCtrlDown() then
-        inputText = inputText .. love.system.getClipboardText()
+        input:textinput(love.system.getClipboardText())
     end
 
     if key == "up" then
@@ -508,10 +530,10 @@ function global.consoleHandleKey(key)
             return
         end
         if currentHistory.index == 0 then
-            currentHistory.val = inputText
+            currentHistory.val = input:toString()
         end
         currentHistory.index = currentHistory.index + 1
-        inputText = history[currentHistory.index]
+        input:set(history[currentHistory.index])
     end
 
     if key == "down" then
@@ -520,12 +542,13 @@ function global.consoleHandleKey(key)
         end
         currentHistory.index = currentHistory.index - 1
         if currentHistory.index == 0 then
-            inputText = currentHistory.val
+            input:set(currentHistory.val)
         else
-            inputText = history[currentHistory.index]
+            input:set(history[currentHistory.index])
         end
     end
 
+    input:keypressed(key)
 end
 
 local orig_textinput
@@ -536,7 +559,7 @@ local function textinput(t)
         end -- That way if another mod uses this, I don't clobber it's implementation
         return
     end
-    inputText = inputText .. t
+    input:textinput(t)
 end
 
 local orig_wheelmoved
@@ -556,6 +579,9 @@ local function hookStuffs()
 
     orig_wheelmoved = love.wheelmoved
     love.wheelmoved = wheelmoved
+
+    orig_keypressed = love.keypressed
+    love.keypressed = consoleHandleKey
 end
 
 local function calcHeight(text, width)
@@ -580,10 +606,8 @@ local function hyjackErrorHandler()
         local ret = orig(msg)
         orig_wheelmoved = nil
         orig_textinput = nil
-        consoleOpen = false
-        inputText = ""
-        love.keyboard.setKeyRepeat(gameKeyRepeat)
-        love.keyboard.setTextInput(gameTextInput)
+        orig_keypressed = nil
+        closeConsole()
         local justCrashed = true
 
         local present = love.graphics.present
@@ -609,7 +633,7 @@ local function hyjackErrorHandler()
                 elseif consoleOpen and e == "wheelmoved" then
                     safeCall(wheelmoved, a, b)
                 elseif e == "keypressed" then
-                    if safeCall(global.consoleHandleKey, a) then
+                    if safeCall(consoleHandleKey, a) then
                         table.insert(evts, {e,a,b,c})
                     end
                 else
@@ -649,6 +673,7 @@ function global.doConsoleRender()
     local now = love.timer.getTime()
     if firstConsoleRender == nil then
         if config.getValue("hyjackErrorHandler") then hyjackErrorHandler() end
+        loadHistory()
         hookStuffs()
         firstConsoleRender = now
         local key = "/"
@@ -661,13 +686,14 @@ function global.doConsoleRender()
     love.graphics.setColor(0, 0, 0, .5)
     if consoleOpen then
         bottom = bottom - padding * 2
-        local text = "> " .. inputText
-        local lineHeight, realWidth, singleLineHeight = calcHeight(text, lineWidth)
-        love.graphics.rectangle("fill", padding, bottom - lineHeight + padding, lineWidth, lineHeight + padding * 2)
+        input:setWidth(lineWidth - padding * 2)
+        local inputHeight = input:getHeight()
+        love.graphics.rectangle("fill", padding, bottom - inputHeight + padding, lineWidth, inputHeight + padding * 2)
         love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.printf(text, padding * 2, bottom - lineHeight + singleLineHeight, lineWidth - padding * 2)
+        input:draw(padding * 2, bottom - inputHeight + padding * 2)
 
-        bottom = bottom - lineHeight - padding * 2
+
+        bottom = bottom - inputHeight - padding
     end
 
     -- Main window
@@ -758,6 +784,10 @@ end
 logger.handleLogsChange = handleLogsChange
 config.configDefinition.showNewLogs.onUpdate = function(v)
     showNewLogs = v
+end
+
+function global.isConsoleFocused() -- For mods to disable keys.
+    return consoleOpen
 end
 
 return global

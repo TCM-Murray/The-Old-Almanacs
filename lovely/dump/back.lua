@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '69c1f85c58f928d377a09f84ecd8fd119514f9885b3a587f2c7e109f25cef0b0'
+LOVELY_INTEGRITY = '90b1d07ab8d39287199be8d21cffcffc5968271b48b011b464ae95e79edab216'
 
 --Class
 Back = Object:extend()
@@ -168,8 +168,8 @@ function Back:trigger_effect(args)
                 play_sound('gong', 0.94, 0.3)
                 play_sound('gong', 0.94*1.5, 0.2)
                 play_sound('tarot1', 1.5)
-                ease_colour(G.C.UI_CHIPS, G.C.PLASMA or {0.8, 0.45, 0.85, 1})
-                ease_colour(G.C.UI_MULT, G.C.PLASMA or {0.8, 0.45, 0.85, 1})
+                ease_colour(G.C.UI_CHIPS, {0.8, 0.45, 0.85, 1})
+                ease_colour(G.C.UI_MULT, {0.8, 0.45, 0.85, 1})
                 attention_text({
                     scale = 1.4, text = text, hold = 2, align = 'cm', offset = {x = 0,y = -2.7},major = G.play
                 })
@@ -179,8 +179,8 @@ function Back:trigger_effect(args)
                     blocking = false,
                     delay =  4.3,
                     func = (function() 
-                            ease_colour(G.C.UI_CHIPS, G.C.CHIPS, 2)
-                            ease_colour(G.C.UI_MULT, G.C.MULT, 2)
+                            ease_colour(G.C.UI_CHIPS, G.C.BLUE, 2)
+                            ease_colour(G.C.UI_MULT, G.C.RED, 2)
                         return true
                     end)
                 }))
@@ -191,8 +191,8 @@ function Back:trigger_effect(args)
                     no_delete = true,
                     delay =  6.3,
                     func = (function() 
-                        G.C.UI_CHIPS = copy_table(G.C.CHIPS)
-                        G.C.UI_MULT = copy_table(G.C.MULT)
+                        G.C.UI_CHIPS[1], G.C.UI_CHIPS[2], G.C.UI_CHIPS[3], G.C.UI_CHIPS[4] = G.C.BLUE[1], G.C.BLUE[2], G.C.BLUE[3], G.C.BLUE[4]
+                        G.C.UI_MULT[1], G.C.UI_MULT[2], G.C.UI_MULT[3], G.C.UI_MULT[4] = G.C.RED[1], G.C.RED[2], G.C.RED[3], G.C.RED[4]
                         return true
                     end)
                 }))

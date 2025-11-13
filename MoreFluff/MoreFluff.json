@@ -1,0 +1,14 @@
+{
+	"id": "MoreFluff",
+	"name": "More Fluff",
+	"author": ["notmario", "CHECK CREDITS IN MOD TAB"],
+	"description": "Adds... More Fluff :exploding_head:",
+	"prefix": "mf",
+	"main_file": "MoreFluff.lua",
+	"badge_colour": "814BA8",
+	"version": "1.6.0",
+	"dependencies": [
+    "Steamodded(>=1.0.0~BETA-0827c)"
+  ],
+	"allow_redistribution": true
+}

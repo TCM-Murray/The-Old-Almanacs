@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '5bdb002d794f1456ce0e1a0c4ba985fab9ed510e491dad7988a4d41aab8a1d98'
+LOVELY_INTEGRITY = 'bd7fa1ec77427945427776dd5265e606d577dc984d68ce3dd3b80c8c11bfdc80'
 
 --class
 Blind = Moveable:extend()
@@ -144,6 +144,7 @@ function Blind:set_blind(blind, reset, silent)
                             G.HUD_blind:get_UIE_by_ID("dollars_to_be_earned").config.object:pop_in(0)
                             G.HUD_blind:get_UIE_by_ID("HUD_blind_name").config.object:pop_in(0)
                             G.HUD_blind:get_UIE_by_ID("HUD_blind_count"):juice_up()
+                            self.dissolve = 0
                             self.children.animatedSprite:set_sprite_pos(self.config.blind.pos)
                             self.blind_set = true
                             G.ROOM.jiggle = G.ROOM.jiggle + 3

@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'fe1d0c4935bfeb0f91e48fc0d8ad540ed7066cafa841968751e9cf1979272e4c'
+LOVELY_INTEGRITY = 'f343b61ad748e75d88a2b6f12f80987d7092c18f8c0eb4d27bf145ad1b781895'
 
 --Class
 Game = Object:extend()
@@ -129,7 +129,6 @@ function Game:start_up()
 
     --Load all shaders from resources
     self.SHADERS = {}
-    Blueprint.load_shaders()
     local shader_files = love.filesystem.getDirectoryItems("resources/shaders")
     for k, filename in ipairs(shader_files) do
         local extension = string.sub(filename, -3)
@@ -158,7 +157,7 @@ function Game:start_up()
         self.SETTINGS.GRAPHICS.texture_scaling = self.SETTINGS.GRAPHICS.texture_scaling > 1 and 2 or 1
     end
 
-    Cryptid.profile_prefix = "J"
+    Cryptid.profile_prefix = "M"
     if type(G.SETTINGS.profile) ~= "string" or G.SETTINGS.profile:sub(1, #Cryptid.profile_prefix) ~= Cryptid.profile_prefix then
         G.SETTINGS.profile = Cryptid.profile_prefix .. "1"
     end
@@ -218,15 +217,47 @@ function Game:start_up()
     --Create the event manager for the game
     self.E_MANAGER = EventManager()
     self.SPEEDFACTOR = 1
-    Trance_set_globals(self, 0);print(tprint(G.C.SPLASH))
     initSteamodded()
 
     set_profile_progress()
     Cartomancer.load_mod_file('internal/localization.lua', 'cartomancer.localization')
-    Blueprint.load_mod_file('internal/localization.lua', 'internal.localization')
     boot_timer('prep stage', 'splash prep',1)
     self:splash_screen()
     boot_timer('splash prep', 'end',1)
+    if not SMODS then
+        local function normalize_path(path)
+            return path:gsub("\\+", "/"):gsub("/+", "/"):gsub("/$", "")
+        end
+        local function split_last(path)
+            path = normalize_path(path)
+            local parent, last = path:match("^(.-)/([^/]+)$")
+            if not parent then
+                return "", path
+            end
+            return parent, last
+        end
+    
+        local normalized_path = normalize_path("C:\\Users\\sergi\\AppData\\Roaming\\Balatro\\Mods\\HandyBalatro")
+        local mods_folder_path = normalize_path(require("lovely").mod_dir)
+    
+        local invalid_mod_path = normalized_path .. "/HandyBalatro"
+        local correct_path = mods_folder_path .. "/HandyBalatro"
+    
+        error(string.format(
+                    [[
+    
+    
+    Handy mod installed incorrectly.
+    
+    Right now it's placed in %s, which is called "Nested folder".
+    To make it work properly, move mentioned folder in %s,
+    so result mod directory should be %s
+    ]],
+            invalid_mod_path,
+            mods_folder_path,
+            correct_path
+        ))
+    end
 end
 
 function Game:init_item_prototypes()
@@ -1600,8 +1631,8 @@ function Game:main_menu(change_context) --True if main menu is accessed from the
         send = {
             {name = 'time', ref_table = G.TIMERS, ref_value = 'REAL_SHADER'},
             {name = 'vort_speed', val = 0.4},
-            {name = 'colour_1', ref_table = G.C.SPLASH, ref_value = 1},
-            {name = 'colour_2', ref_table = G.C.SPLASH, ref_value = 2},
+            {name = 'colour_1', ref_table = G.C, ref_value = 'RED'},
+            {name = 'colour_2', ref_table = G.C, ref_value = 'BLUE'},
             {name = 'mid_flash', ref_table = splash_args, ref_value = 'mid_flash'},
             {name = 'vort_offset', val = 0},
         }}})
@@ -1800,8 +1831,8 @@ function Game:demo_cta() --True if main menu is accessed from the splash screen,
         send = {
             {name = 'time', ref_table = G.TIMERS, ref_value = 'REAL_SHADER'},
             {name = 'vort_speed', val = 0.4},
-            {name = 'colour_1', ref_table = G.C.SPLASH, ref_value = 1},
-            {name = 'colour_2', ref_table = G.C.SPLASH, ref_value = 2},
+            {name = 'colour_1', ref_table = G.C, ref_value = 'RED'},
+            {name = 'colour_2', ref_table = G.C, ref_value = 'BLUE'},
             {name = 'mid_flash', ref_table = splash_args, ref_value = 'mid_flash'},
             {name = 'vort_offset', val = 0},
         }}})
@@ -2135,13 +2166,6 @@ function Game:start_run(args)
     end
     self.GAME.selected_back_key = selected_back
     
-    if not saveTable then
-        if args.seed then self.GAME.seeded = true end
-        self.GAME.pseudorandom.seed = args.seed or (not (G.SETTINGS.tutorial_complete or G.SETTINGS.tutorial_progress.completed_parts["big_blind"]) and "TUTORIAL") or generate_starting_seed()
-    end
-    for k, v in pairs(self.GAME.pseudorandom) do if v == 0 then self.GAME.pseudorandom[k] = pseudohash(k..self.GAME.pseudorandom.seed) end end
-    self.GAME.pseudorandom.hashed_seed = pseudohash(self.GAME.pseudorandom.seed)
-    
     if saveTable then
         self.GAME.current_scoring_calculation = SMODS.Scoring_Calculations[saveTable.SCORING_CALC.key]:load({
             config = saveTable.SCORING_CALC.config
@@ -2150,8 +2174,8 @@ function Game:start_run(args)
         self.GAME.current_scoring_calculation = SMODS.Scoring_Calculations['multiply']:new()
     end
 
-    G.C.UI_CHIPS = copy_table(G.C.CHIPS)
-    G.C.UI_MULT = copy_table(G.C.MULT)
+    G.C.UI_CHIPS[1], G.C.UI_CHIPS[2], G.C.UI_CHIPS[3], G.C.UI_CHIPS[4] = G.C.BLUE[1], G.C.BLUE[2], G.C.BLUE[3], G.C.BLUE[4]
+    G.C.UI_MULT[1], G.C.UI_MULT[2], G.C.UI_MULT[3], G.C.UI_MULT[4] = G.C.RED[1], G.C.RED[2], G.C.RED[3], G.C.RED[4]
 
     if not saveTable then 
         if false then
@@ -2233,6 +2257,8 @@ function Game:start_run(args)
                             self.GAME.modifiers.no_blind_reward[v.value] = true
                         elseif v.value then
                             self.GAME.modifiers[v.id] = v.value
+                        elseif v.id == 'no_shop_planets' then
+                            self.GAME.planet_rate = 0
                         elseif v.id == 'no_shop_jokers' then 
                             self.GAME.joker_rate = 0
                         else
@@ -2286,16 +2312,13 @@ function Game:start_run(args)
 
     G.GAME.chips_text = ''
 
-    -- moved this code to earlier in the function (by CardSleeves)
-    --[[
     if not saveTable then
         if args.seed then self.GAME.seeded = true end
         self.GAME.pseudorandom.seed = args.seed or (not (G.SETTINGS.tutorial_complete or G.SETTINGS.tutorial_progress.completed_parts['big_blind']) and "TUTORIAL") or generate_starting_seed()
     end
-    
+
     for k, v in pairs(self.GAME.pseudorandom) do if v == 0 then self.GAME.pseudorandom[k] = pseudohash(k..self.GAME.pseudorandom.seed) end end
     self.GAME.pseudorandom.hashed_seed = pseudohash(self.GAME.pseudorandom.seed)
-    --]]
     if G.GAME.modifiers.cry_misprint_min and not args.savetext then
         for k, v in pairs(G.GAME.hands) do
             v.chips = to_big(cry_format(v.chips * Cryptid.log_random(pseudoseed('cry_misprint'),G.GAME.modifiers.cry_misprint_min,G.GAME.modifiers.cry_misprint_max),"%.2g"))
@@ -2690,7 +2713,6 @@ function Game:update(dt)
 
         if (G.STATE == G.STATES.HAND_PLAYED) or (G.STATE == G.STATES.NEW_ROUND) or Incantation and Incantation.accelerate then
             G.ACC = math.min((G.ACC or 0) + dt*0.2*self.SETTINGS.GAMESPEED, 16)
-             elseif Handy.insta_cash_out.is_skipped then G.ACC = 999 
         else
             G.ACC = 0
         end
@@ -2698,6 +2720,9 @@ function Game:update(dt)
         self.SPEEDFACTOR = (G.STAGE == G.STAGES.RUN and not G.SETTINGS.paused and not G.screenwipe) and self.SETTINGS.GAMESPEED or 1
         self.SPEEDFACTOR = self.SPEEDFACTOR + math.max(0, math.abs(G.ACC) - 2)
         self.SPEEDFACTOR = self.SPEEDFACTOR * Handy.speed_multiplier.get_value() or 1
+        if Handy.insta_cash_out.is_skipped and not Handy.is_in_multiplayer() then
+            self.SPEEDFACTOR = math.max(self.SPEEDFACTOR, 999)
+        end
 
         self.TIMERS.TOTAL = self.TIMERS.TOTAL + dt*(self.SPEEDFACTOR)
 
@@ -2724,6 +2749,7 @@ function Game:update(dt)
         	G.FUNCS.your_collection_tags_page()
         end
         self.E_MANAGER:update(self.real_dt)
+        Handy.speed_multiplier.accelerate_queue(self.E_MANAGER)
                     timer_checkpoint('e_manager', 'update')
 
         if G.GAME.blind and G.boss_throw_hand and self.STATE == self.STATES.SELECTING_HAND then
@@ -3269,7 +3295,7 @@ end
 function Game:update_selecting_hand(dt)
     if not self.deck_preview and not G.OVERLAY_MENU and (
         (self.deck and self.deck.cards[1] and self.deck.cards[1].states.collide.is and ((not self.deck.cards[1].states.drag.is) or self.CONTROLLER.HID.touch) and (not self.CONTROLLER.HID.controller)) or 
-        G.CONTROLLER.held_buttons.triggerleft or Handy.show_deck_preview.is_hold
+        Handy.show_deck_preview.is_hold
 ) then
         if self.buttons then
             self.buttons.states.visible = false
@@ -3282,7 +3308,7 @@ function Game:update_selecting_hand(dt)
             blocking = false,
             blockable = false,
             func = function()
-                if self.deck_preview and not (((self.deck and self.deck.cards[1] and self.deck.cards[1].states.collide.is and not self.CONTROLLER.HID.controller)) or G.CONTROLLER.held_buttons.triggerleft or Handy.show_deck_preview.is_hold
+                if self.deck_preview and not (((self.deck and self.deck.cards[1] and self.deck.cards[1].states.collide.is and not self.CONTROLLER.HID.controller)) or Handy.show_deck_preview.is_hold
 ) then 
                     self.deck_preview:remove()
                     self.deck_preview = nil
@@ -3350,6 +3376,7 @@ function Game:update_shop(dt)
                         blockable = false,
                         func = function()
                             if math.abs(G.shop.T.y - G.shop.VT.y) < 3 then
+                            Handy.regular_keybinds.on_shop_loaded()
                                 G.ROOM.jiggle = G.ROOM.jiggle + 3
                                 play_sound('cardFan2')
                                 for i = 1, #G.GAME.tags do
@@ -3461,20 +3488,6 @@ function Game:update_shop(dt)
                                 end
 
                                 if not nosave_shop then SMODS.calculate_context({starting_shop = true}) end
-                                if CardSleeves then
-                                    -- CardSleeves custom context stuff
-                                    G.E_MANAGER:add_event(Event({
-                                        delay = 0.01,  --  because stupid fucking tags not applying immediately
-                                        blockable = true,
-                                        trigger = 'after',
-                                        func = function()
-                                            local sleeve_center = CardSleeves.Sleeve:get_obj(G.GAME.selected_sleeve or "sleeve_casl_none")
-                                            sleeve_center:trigger_effect{context = "shop_final_pass"}
-                                            if type(sleeve_center.calculate) == "function" then sleeve_center:calculate(sleeve_center, {shop_final_pass = true}) end
-                                            return true
-                                        end
-                                    }))
-                                end
                                 G.CONTROLLER:snap_to({node = G.shop:get_UIE_by_ID('next_round_button')})
                                 if not nosave_shop then G.E_MANAGER:add_event(Event({ func = function() save_run(); return true end})) end
                                 return true

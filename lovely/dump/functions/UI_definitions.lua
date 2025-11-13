@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '851820690bc51170a395741c12e8490d94f4e51b6145e2635ab76c4494244851'
+LOVELY_INTEGRITY = '31ffd9d0394207ad4828de8f746123cac12dd3e1832e1a8c159d76e2da554b6a'
 
 --Create a global UIDEF that contains all UI definition functions\
 --As a rule, these contain functions that return a table T representing the definition for a UIBox
@@ -201,9 +201,7 @@ function create_UIBox_notify_alert(_achievement, _type)
   local subtext = _type == 'achievement' and localize(G.F_TROPHIES and 'k_trophy' or 'k_achievement') or
     _type == 'Joker' and localize('k_joker') or 
     _type == 'Voucher' and localize('k_voucher') or
-    _type == 'Back' and localize('k_deck') or
-    _c.set and localize('k_' .. _c.set:lower()) or
-    'ERROR'
+    _type == 'Back' and localize('k_deck') or 'ERROR'
 
   if _achievement == 'b_challenge' then subtext = localize('k_challenges') end
   local name = _type == 'achievement' and localize(_achievement, 'achievement_names') or 'ERROR'
@@ -283,6 +281,16 @@ function create_UIBox_high_scores_filling(_resp)
 end
 
 function G.UIDEF.use_and_sell_buttons(card)
+    if (card.area == G.pack_cards and G.pack_cards) and card.ability.consumeable and SDM_0s_Stuff_Funcs.is_bakery_good(card) then
+        if G.STATE == G.STATES.SMODS_BOOSTER_OPENED then
+            return {
+                n=G.UIT.ROOT, config = {padding = 0, colour = G.C.CLEAR}, nodes={
+                  {n=G.UIT.R, config={ref_table = card, r = 0.08, padding = 0.1, align = "bm", minw = 0.5*card.T.w - 0.15, maxw = 0.9*card.T.w - 0.15, minh = 0.3*card.T.h, hover = true, shadow = true, colour = G.C.UI.BACKGROUND_INACTIVE, one_press = true, button = 'use_card', func = 'can_pick_card'}, nodes={
+                    {n=G.UIT.T, config={text = localize('b_select'),colour = G.C.UI.TEXT_LIGHT, scale = 0.45, shadow = true}}
+                  }},
+              }}
+        end
+    end
   local sell = nil
   local use = nil
   if card.area and (card.area == G.consumeables) and card.gc and (card:gc().set == 'Booster' or card:gc().set == 'Voucher') then
@@ -346,6 +354,16 @@ function G.UIDEF.use_and_sell_buttons(card)
       end
   end
   if card.ability.consumeable then
+  if card.area and card.area == G.pack_cards and SDM_0s_Stuff_Funcs.is_bakery_good(card) then
+      return {
+        n=G.UIT.ROOT, config = {padding = 0, colour = G.C.CLEAR}, nodes={
+          {n=G.UIT.C, config={padding = 0.15, align = 'cl'}, nodes={
+            {n=G.UIT.R, config={align = 'cl'}, nodes={
+              sell
+            }},
+          }},
+      }}
+  end
     if (card.area == G.pack_cards and G.pack_cards) then
       return {
         n=G.UIT.ROOT, config = {padding = 0, colour = G.C.CLEAR}, nodes={
@@ -423,6 +441,16 @@ function G.UIDEF.card_focus_ui(card)
   if card.area == G.shop_jokers and G.shop_jokers then --Add a buy button
     local buy_and_use = nil
     if card.ability.consumeable then 
+    if card.area and card.area == G.pack_cards and SDM_0s_Stuff_Funcs.is_bakery_good(card) then
+        return {
+          n=G.UIT.ROOT, config = {padding = 0, colour = G.C.CLEAR}, nodes={
+            {n=G.UIT.C, config={padding = 0.15, align = 'cl'}, nodes={
+              {n=G.UIT.R, config={align = 'cl'}, nodes={
+                sell
+              }},
+            }},
+        }}
+    end
       base_attach.children.buy_and_use = G.UIDEF.card_focus_button{
         card = card, parent = base_attach, type = 'buy_and_use',
         func = 'can_buy_and_use', button = 'buy_from_shop', card_width = card_width
@@ -459,6 +487,15 @@ function G.UIDEF.card_focus_ui(card)
       func = 'can_select_card', button = 'use_card', card_width = card_width
     }
   end
+  if (card.area == G.consumeables and G.consumeables) and card.ability.consumeable and SDM_0s_Stuff_Funcs.is_bakery_good(card) then
+      base_attach.children.use = nil
+  end
+  if (card.area == G.pack_cards and G.pack_cards) and card.ability.consumeable and SDM_0s_Stuff_Funcs.is_bakery_good(card) then
+      base_attach.children.use = G.UIDEF.card_focus_button{
+          card = card, parent = base_attach, type = 'select',
+          func = 'can_pick_card', button = 'select_card', card_width = card_width
+      }
+  end
   if (card.area == G.jokers and G.jokers or card.area == G.consumeables and G.consumeables) and G.STATE ~= G.STATES.TUTORIAL then --Add a sell button
     base_attach.children.sell = G.UIDEF.card_focus_button{
       card = card, parent = base_attach, type = 'sell',
@@ -466,6 +503,15 @@ function G.UIDEF.card_focus_ui(card)
     }
   end
 
+  if card.area == G.shop_jokers and G.shop_jokers then
+    if card.ability.consumeable and SDM_0s_Stuff_Funcs.is_bakery_good(card) then
+      base_attach.children.buy_and_use = nil
+    end
+    base_attach.children.buy = G.UIDEF.card_focus_button{
+      card = card, parent = base_attach, type = 'buy',
+      func = 'can_buy', button = 'buy_from_shop', card_width = card_width, buy_and_use = buy_and_use
+    }
+  end
   return base_background
 end
 
@@ -779,6 +825,44 @@ function G.UIDEF.shop()
           return true
       end)
     }))
+    if G.GAME and G.GAME.modifiers and G.GAME.modifiers.sdm_no_reroll then
+        local t = {n=G.UIT.ROOT, config = {align = 'cl', colour = G.C.CLEAR}, nodes={
+            UIBox_dyn_container({
+                {n=G.UIT.C, config={align = "cm", padding = 0.1, emboss = 0.05, r = 0.1, colour = G.C.DYN_UI.BOSS_MAIN}, nodes={
+                    {n=G.UIT.R, config={align = "cm", padding = 0.05}, nodes={
+                    {n=G.UIT.C, config={align = "cm", padding = 0.1}, nodes={
+                        {n=G.UIT.R,config={id = 'next_round_button', align = "cm", minw = 2.8, minh = 1.5, r=0.15,colour = G.C.RED, one_press = true, button = 'toggle_shop', hover = true,shadow = true}, nodes = {
+                        {n=G.UIT.R, config={align = "cm", padding = 0.07, focus_args = {button = 'y', orientation = 'cr'}, func = 'set_button_pip'}, nodes={
+                            {n=G.UIT.R, config={align = "cm", maxw = 1.3}, nodes={
+                            {n=G.UIT.T, config={text = localize('b_next_round_1'), scale = 0.4, colour = G.C.WHITE, shadow = true}}
+                            }},
+                            {n=G.UIT.R, config={align = "cm", maxw = 1.3}, nodes={
+                            {n=G.UIT.T, config={text = localize('b_next_round_2'), scale = 0.4, colour = G.C.WHITE, shadow = true}}
+                            }}
+                        }},
+                        }},
+                    }},
+                    {n=G.UIT.C, config={align = "cm", padding = 0.2, r=0.2, colour = G.C.L_BLACK, emboss = 0.05, minw = 8.2}, nodes={
+                        {n=G.UIT.O, config={object = G.shop_jokers}},
+                    }},
+                    }},
+                    {n=G.UIT.R, config={align = "cm", minh = 0.2}, nodes={}},
+                    {n=G.UIT.R, config={align = "cm", padding = 0.1}, nodes={
+                    {n=G.UIT.C, config={align = "cm", padding = 0.15, r=0.2, colour = G.C.L_BLACK, emboss = 0.05}, nodes={
+                        {n=G.UIT.C, config={align = "cm", padding = 0.2, r=0.2, colour = G.C.BLACK, maxh = G.shop_vouchers.T.h+0.4}, nodes={
+                        {n=G.UIT.T, config={text = localize{type = 'variable', key = 'ante_x_voucher', vars = {G.GAME.round_resets.ante}}, scale = 0.45, colour = G.C.L_BLACK, vert = true}},
+                        {n=G.UIT.O, config={object = G.shop_vouchers}},
+                        }},
+                    }},
+                    {n=G.UIT.C, config={align = "cm", padding = 0.15, r=0.2, colour = G.C.L_BLACK, emboss = 0.05}, nodes={
+                        {n=G.UIT.O, config={object = G.shop_booster}},
+                    }},
+                    }}
+                }
+            },
+        }, false)}}
+        return t
+    end
     local t = {n=G.UIT.ROOT, config = {align = 'cl', colour = G.C.CLEAR}, nodes={
             UIBox_dyn_container({
                 {n=G.UIT.C, config={align = "cm", padding = 0.1, emboss = 0.05, r = 0.1, colour = G.C.DYN_UI.BOSS_MAIN}, nodes={
@@ -1462,10 +1546,13 @@ function add_tag(_tag)
   G.HUD_tags = G.HUD_tags or {}
   local tag_sprite_ui = _tag:generate_UI()
   local _handy_tag_click_target = _tag.tag_sprite
-  local _handy_tag_click_ref = _handy_tag_click_target.click
-  _handy_tag_click_target.click = function(...)
-      if Handy.controller.process_tag_click(_tag) then return end
-      return _handy_tag_click_ref(...)
+  if _handy_tag_click_target then
+      _handy_tag_click_target.states.click.can = true
+      local _handy_tag_click_ref = _handy_tag_click_target.click
+      function _handy_tag_click_target:click(...)
+          if Handy.controller.process_tag_click(_tag) then return end
+          return _handy_tag_click_ref(self, ...)
+      end
   end
   G.HUD_tags[#G.HUD_tags+1] = UIBox{
       definition = {n=G.UIT.ROOT, config={align = "cm",padding = 0.05, colour = G.C.CLEAR}, nodes={
@@ -1629,32 +1716,6 @@ contents.hand =
           }}
     --]]
     contents.hand = SMODS.GUI.hand_score_display_ui(scale)
-contents.hand =
-        {n=G.UIT.R, config={align = "cm", id = 'hand_text_area', colour = darken(G.C.BLACK, 0.1), r = 0.1, emboss = 0.05, padding = 0.03}, nodes={
-            {n=G.UIT.C, config={align = "cm"}, nodes={
-              {n=G.UIT.R, config={align = "cm", minh = 1.1}, nodes={
-                {n=G.UIT.O, config={id = 'hand_name', func = 'hand_text_UI_set',object = DynaText({string = {{ref_table = G.GAME.current_round.current_hand, ref_value = "handname_text"}}, colours = {G.C.UI.TEXT_LIGHT}, shadow = true, float = true, scale = scale*1.4})}},
-                {n=G.UIT.O, config={id = 'cry_asc', func = 'cry_asc_UI_set',object = DynaText({string = {{ref_table = G.GAME.current_round.current_hand, ref_value = "cry_asc_num_text"}}, colours = {G.C.GOLD}, shadow = true, float = true, scale = scale*1})}},
-                {n=G.UIT.O, config={id = 'hand_chip_total', func = 'hand_chip_total_UI_set',object = DynaText({string = {{ref_table = G.GAME.current_round.current_hand, ref_value = "chip_total_text"}}, colours = {G.C.UI.TEXT_LIGHT}, shadow = true, float = true, scale = scale*1.4})}},
-                {n=G.UIT.T, config={ref_table = G.GAME.current_round.current_hand, ref_value='hand_level', scale = scale, colour = G.C.UI.TEXT_LIGHT, id = 'hand_level', shadow = true}}
-              }},
-              {n=G.UIT.R, config={align = "cm", minh = .5, padding = 0.1}, nodes={
-                {n=G.UIT.C, config={align = "cr", minw = 2, minh = .5, r = 0.1,colour = G.C.UI_CHIPS, id = 'hand_chip_area', emboss = 0.05}, nodes={
-                    {n=G.UIT.O, config={func = 'flame_handler',no_role = true, id = 'flame_chips', object = Moveable(0,0,0,0), w = 0, h = 0}},
-                    {n=G.UIT.O, config={id = 'hand_chips', func = 'hand_chip_UI_set',object = DynaText({string = {{ref_table = G.GAME.current_round.current_hand, ref_value = "chip_text"}}, colours = {G.C.UI.TEXT_LIGHT}, font = G.LANGUAGES['en-us'].font, shadow = true, float = true, scale = scale*1.15})}},
-                    {n=G.UIT.B, config={w=0.1,h=0.1}},
-                }},
-                {n=G.UIT.C, config={align = "cm"}, nodes={
-                  {n=G.UIT.T, config={id = "chipmult_op", text = "X", lang = G.LANGUAGES["en-us"], scale = scale, colour = G.C.UI_MULT, shadow = true}},
-                }},
-                {n=G.UIT.C, config={align = "cl", minw = 2, minh= .5, r = 0.1,colour = G.C.UI_MULT, id = 'hand_mult_area', emboss = 0.05}, nodes={
-                  {n=G.UIT.O, config={func = 'flame_handler',no_role = true, id = 'flame_mult', object = Moveable(0,0,0,0), w = 0, h = 0}},
-                  {n=G.UIT.B, config={w=0.1,h=0.1}},
-                  {n=G.UIT.O, config={id = 'hand_mult', func = 'hand_mult_UI_set',object = DynaText({string = {{ref_table = G.GAME.current_round.current_hand, ref_value = "mult_text"}}, colours = {G.C.UI.TEXT_LIGHT}, font = G.LANGUAGES['en-us'].font, shadow = true, float = true, scale = scale*1.15})}},
-                }}
-              }}
-            }}
-          }}
     contents.dollars_chips = {n=G.UIT.R, config={align = "cm",r=0.1, padding = 0,colour = G.C.DYN_UI.BOSS_MAIN, emboss = 0.05, id = 'row_dollars_chips'}, nodes={
       {n=G.UIT.C, config={align = "cm", padding = 0.1}, nodes={
         {n=G.UIT.C, config={align = "cm", minw = 1.3}, nodes={
@@ -2638,6 +2699,8 @@ function G.UIDEF.settings_tab(tab)
       G.UIDEF.nopeus_options(),
       G.UIDEF.nopeus_fastforward_options(),
       G.UIDEF.nopeus_statustext_options(),
+      Handy.UI.CD.speed_multiplier.settings_option_cycle({ compress = true }),
+      Handy.UI.CD.animation_skip.settings_option_cycle({ compress = true }),
       create_option_cycle({w = 5, label = localize('b_set_play_discard_pos'),scale = 0.8, options = localize('ml_play_discard_pos_opt'), opt_callback = 'change_play_discard_position', current_option = (G.SETTINGS.play_button_pos)}),
       G.F_RUMBLE and create_toggle({label = localize('b_set_rumble'), ref_table = G.SETTINGS, ref_value = 'rumble'}) or nil,
       create_slider({label = localize('b_set_screenshake'),w = 4, h = 0.4, ref_table = G.SETTINGS, ref_value = 'screenshake', min = 0, max = 100}),
@@ -6748,6 +6811,15 @@ function create_button_binding_pip(args)
     ['rightstick'] = 17,
     ['guide'] = 19
   }
+  if not args.button or not button_sprite_map[args.button] then
+      return {
+          n = G.UIT.ROOT,
+          config = { align = "cm", colour = G.C.CLEAR },
+          nodes = {
+              { n = G.UIT.O, config = { object = Moveable() } },
+          },
+      }
+  end
   local BUTTON_SPRITE = Sprite(0,0,args.scale or 0.45,args.scale or 0.45,G.ASSET_ATLAS["gamepad_ui"],
     {x=button_sprite_map[args.button],
      y=G.CONTROLLER.GAMEPAD_CONSOLE == 'Nintendo' and 2 or G.CONTROLLER.GAMEPAD_CONSOLE == 'Playstation' and (G.F_PS4_PLAYSTATION_GLYPHS and 3 or 1) or 0})

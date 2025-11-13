@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'ef68abadc8bcd0872e5b762a7a4268be81eab477a392255da894ffd794d252c6'
+LOVELY_INTEGRITY = '7d063b3a4c36418ee8fb8472ed488e5afc1c1ccb234d80e2c039b96a3e7bc875'
 
 function set_screen_positions()
     if G.STAGE == G.STAGES.RUN then
@@ -70,6 +70,7 @@ function ease_chips(mod)
 end
 
 function ease_dollars(mod, instant)
+local handy_ease_muted = Handy.animation_skip.mute_ease_dollars > 0
     local function _mod(mod)
         local dollar_UI = G.HUD:get_UIE_by_ID('dollar_text_UI')
         mod = mod or 0
@@ -97,6 +98,7 @@ function ease_dollars(mod, instant)
           align = 'cm',
           })
         --Play a chip sound
+        if handy_ease_muted then return end
         play_sound('coin1')
     end
     if instant then
@@ -480,6 +482,13 @@ end
 
 function level_up_hand(card, hand, instant, amount)
     amount = amount or 1
+    if SMODS then
+        local sdm_wormhole = SMODS.find_card("j_sdm_wormhole")
+        for i = 1, #sdm_wormhole do
+            sdm_wormhole[i]:juice_up()
+        end
+        if #sdm_wormhole > 0 then amount = amount * (2 ^ #sdm_wormhole) end
+    end
     G.GAME.hands[hand].level = math.max(0, G.GAME.hands[hand].level + amount)
     for name, parameter in pairs(SMODS.Scoring_Parameters) do
         if G.GAME.hands[hand][name] then parameter:level_up_hand(amount, G.GAME.hands[hand]) end
@@ -2309,6 +2318,18 @@ local rarity = _rarity or SMODS.poll_rarity("Joker", 'rarity'..G.GAME.round_rese
                                 end
                             end
                         end
+                            local curr_deck = (G.GAME.viewed_back and G.GAME.viewed_back.name) or (G.GAME.selected_back and G.GAME.selected_back.name) or "Red Deck"
+                            local curr_sleeve = (CardSleeves and G.GAME.selected_sleeve) or "sleeve_casl_none"
+                            if curr_deck and (curr_deck == "b_sdm_roguelike" or curr_deck == "b_sdm_deck_of_stuff" or curr_deck == "b_sdm_deck_of_nightmares") then
+                                if v.key == "v_reroll_surplus" or v.key == "v_reroll_glut" or v.key == "v_cry_rerollexchange" then
+                                    include = false
+                                end
+                            end
+                            if (curr_sleeve and curr_sleeve == "sleeve_sdm_roguelike") then
+                                if v.key == "v_reroll_surplus" or v.key == "v_reroll_glut" or v.key == "v_cry_rerollexchange" then
+                                    include = false
+                                end
+                            end
                         if G.shop_vouchers and G.shop_vouchers.cards then
                             for kk, vv in ipairs(G.shop_vouchers.cards) do
                                 if vv.config.center.key == v.key then include = false end
@@ -2357,10 +2378,30 @@ local rarity = _rarity or SMODS.poll_rarity("Joker", 'rarity'..G.GAME.round_rese
 
             if v.no_pool_flag and G.GAME.pool_flags[v.no_pool_flag] then add = nil end
             if v.yes_pool_flag and not G.GAME.pool_flags[v.yes_pool_flag] then add = nil end
+            local curr_deck = (G.GAME.viewed_back and G.GAME.viewed_back.name) or (G.GAME.selected_back and G.GAME.selected_back.name) or "Red Deck"
+            local curr_sleeve = (CardSleeves and G.GAME.selected_sleeve) or "sleeve_casl_none"
+            if ((curr_deck == "b_sdm_modders" or curr_deck == "b_sdm_deck_of_stuff" or curr_deck == "b_sdm_deck_of_nightmares") or curr_sleeve == "sleeve_sdm_modders") and (not v.original_key or (v.class_prefix and v.class_prefix..'_'..v.original_key == v.key)) and v.set == "Joker"  then add = nil end
+            if ((curr_deck == "b_sdm_modders" or curr_deck == "b_sdm_deck_of_stuff" or curr_deck == "b_sdm_deck_of_nightmares") and curr_sleeve == "sleeve_sdm_modders") and (not v.original_key or (v.class_prefix and v.class_prefix..'_'..v.original_key == v.key)) then add = nil end
             if G.GAME.cry_banished_keys[v.key] then add = nil end
             
             add = in_pool and (add or pool_opts.override_base_checks)
             if add and not G.GAME.banned_keys[v.key] then 
+                if curr_deck and (curr_deck == "b_sdm_0_s" or curr_deck == "b_sdm_deck_of_stuff" or curr_deck == "b_sdm_deck_of_nightmares") then
+                    if string.sub(v.key, 1, 6) == "j_sdm_" then
+                        for i = 1, 4 do
+                            _pool[#_pool + 1] = v.key
+                            _pool_size = _pool_size + 1
+                        end
+                    end
+                end
+                if (curr_sleeve and curr_sleeve == "sleeve_sdm_0_s") then
+                    if string.sub(v.key, 1, 6) == "j_sdm_" then
+                        for i = 1, (curr_deck and (curr_deck == "b_sdm_0_s" or curr_deck == "b_sdm_deck_of_stuff" or curr_deck == "b_sdm_deck_of_nightmares" and 5)) or 4 do
+                            _pool[#_pool + 1] = v.key
+                            _pool_size = _pool_size + 1
+                        end
+                    end
+                end
                 _pool[#_pool + 1] = v.key
                 _pool_size = _pool_size + 1
             else
@@ -2579,6 +2620,7 @@ function copy_card(other, new_card, card_scale, playing_card, strip_edition)
     end
     new_card.debuff = other.debuff
     new_card.pinned = other.pinned
+    new_card.sdm_copy = true
     return new_card
 end
 
@@ -2926,6 +2968,8 @@ function generate_card_ui(_c, full_UI_table, specific_vars, card_type, badges, h
         new_table.max_highlighted = new_table.max_highlighted - 1
         cfg = new_table
     end
+    if _c.set == "Joker" and card and card.config.center.key ~= "j_sdm_ditto_joker" and card.ability and card.ability.sdm_is_ditto then info_queue[#info_queue+1] = G.P_CENTERS.j_sdm_ditto_joker end
+    if _c.set == "Partner" and card and card.config.center.key ~= "pnr_sdm_ditto_joker" and card.ability and card.ability.sdm_is_partner_ditto then info_queue[#info_queue+1] = G.P_CENTERS.pnr_sdm_ditto_joker end
     if _c.set == 'Other' then
         localize{type = 'other', key = _c.key, nodes = desc_nodes, vars = specific_vars or _c.vars}
     elseif card_type == 'Locked' then

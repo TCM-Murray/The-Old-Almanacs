@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'eb57f08b76a6deffc51d73c39da8c7bffde38e821f0108e71294953c85379351'
+LOVELY_INTEGRITY = '373a5d8eafab5810f38773ebc67764fb730ed4be96185dbfc960e019f60f98b7'
 
 --class
 Card = Moveable:extend()
@@ -526,6 +526,9 @@ function Card:set_cost()
     if self.ability.rental and (not (self.ability.set == "Planet" and #find_joker('Astronomer') > 0) and self.ability.set ~= "Booster") then self.cost = 1 end
     self.sell_cost = math.max(1, math.floor(self.cost/2)) + (self.ability.extra_value or 0)
     if self.area and self.ability.couponed and (self.area == G.shop_jokers or self.area == G.shop_booster) then self.cost = 0 end
+    if self.config.center_key == "j_sdm_treasure_chest" then
+        self.cost = 0
+    end
     self.sell_cost_label = (self.facing == 'back' and '?') or (G.GAME.modifiers.cry_no_sell_value and 0) or self.sell_cost
 end
 
@@ -1370,7 +1373,16 @@ function Card:get_p_dollars()
     -- TARGET: get_p_dollars
     if ret ~= 0 then
         G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + ret
-        if not Talisman.config_file.disable_anims then G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)})) else G.GAME.dollar_buffer = 0 end
+        if not Handy.animation_skip.should_skip_messages() then
+          G.E_MANAGER:add_event(Event({
+            func = (function()
+              G.GAME.dollar_buffer = 0
+              return true
+            end)
+          }))
+        else
+          Handy.animation_skip.request_dollars_buffer_reset()
+        end
     end
     return ret
 end
@@ -2054,6 +2066,9 @@ function Card:sell_card()
 end
 
 function Card:can_sell_card(context)
+    if (SMODS and next(SMODS.find_card("j_sdm_warehouse"))) and self.ability.name ~= "Warehouse" then
+        return false
+    end
     if (G.play and #G.play.cards > 0) or
         (G.CONTROLLER.locked) or 
         (G.GAME.STOP_USE and G.GAME.STOP_USE > 0) --or 
@@ -3333,7 +3348,16 @@ function Card:calculate_joker(context)
                 if G.GAME.blind.triggered then 
                     ease_dollars(self.ability.extra)
                     G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra
-                    if not Talisman.config_file.disable_anims then G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)})) else G.GAME.dollar_buffer = 0 end
+                    if not Handy.animation_skip.should_skip_messages() then
+                      G.E_MANAGER:add_event(Event({
+                        func = (function()
+                          G.GAME.dollar_buffer = 0
+                          return true
+                        end)
+                      }))
+                    else
+                      Handy.animation_skip.request_dollars_buffer_reset()
+                    end
                     return {
                         message = localize('$')..self.ability.extra,
                         colour = G.C.MONEY
@@ -3740,7 +3764,16 @@ function Card:calculate_joker(context)
                 if self.ability.name == 'Golden Ticket' and
                     SMODS.has_enhancement(context.other_card, 'm_gold') then
                         G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra
-                        if not Talisman.config_file.disable_anims then G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)})) else G.GAME.dollar_buffer = 0 end
+                        if not Handy.animation_skip.should_skip_messages() then
+                          G.E_MANAGER:add_event(Event({
+                            func = (function()
+                              G.GAME.dollar_buffer = 0
+                              return true
+                            end)
+                          }))
+                        else
+                          Handy.animation_skip.request_dollars_buffer_reset()
+                        end
                         return {
                             dollars = self.ability.extra,
                             card = self
@@ -3766,7 +3799,16 @@ function Card:calculate_joker(context)
                     context.other_card:is_face() and
                     SMODS.pseudorandom_probability(self, 'business', 1, self.ability.extra) then
                         G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + 2
-                        if not Talisman.config_file.disable_anims then G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)})) else G.GAME.dollar_buffer = 0 end
+                        if not Handy.animation_skip.should_skip_messages() then
+                          G.E_MANAGER:add_event(Event({
+                            func = (function()
+                              G.GAME.dollar_buffer = 0
+                              return true
+                            end)
+                          }))
+                        else
+                          Handy.animation_skip.request_dollars_buffer_reset()
+                        end
                         return {
                             dollars = 2,
                             card = self
@@ -3814,7 +3856,16 @@ function Card:calculate_joker(context)
                 if self.ability.name == 'Rough Gem' and
                 context.other_card:is_suit("Diamonds") then
                     G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra
-                    if not Talisman.config_file.disable_anims then G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)})) else G.GAME.dollar_buffer = 0 end
+                    if not Handy.animation_skip.should_skip_messages() then
+                      G.E_MANAGER:add_event(Event({
+                        func = (function()
+                          G.GAME.dollar_buffer = 0
+                          return true
+                        end)
+                      }))
+                    else
+                      Handy.animation_skip.request_dollars_buffer_reset()
+                    end
                     return {
                         dollars = self.ability.extra,
                         card = self
@@ -3900,7 +3951,16 @@ function Card:calculate_joker(context)
                             }
                         else
                             G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra.dollars
-                            if not Talisman.config_file.disable_anims then G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)})) else G.GAME.dollar_buffer = 0 end
+                            if not Handy.animation_skip.should_skip_messages() then
+                              G.E_MANAGER:add_event(Event({
+                                func = (function()
+                                  G.GAME.dollar_buffer = 0
+                                  return true
+                                end)
+                              }))
+                            else
+                              Handy.animation_skip.request_dollars_buffer_reset()
+                            end
                             return {
                                 dollars = self.ability.extra.dollars,
                                 card = self
@@ -4087,7 +4147,16 @@ function Card:calculate_joker(context)
                     if self.ability.name == 'To Do List' and context.scoring_name == self.ability.to_do_poker_hand then
                         ease_dollars(self.ability.extra.dollars)
                         G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra.dollars
-                        if not Talisman.config_file.disable_anims then G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)})) else G.GAME.dollar_buffer = 0 end
+                        if not Handy.animation_skip.should_skip_messages() then
+                          G.E_MANAGER:add_event(Event({
+                            func = (function()
+                              G.GAME.dollar_buffer = 0
+                              return true
+                            end)
+                          }))
+                        else
+                          Handy.animation_skip.request_dollars_buffer_reset()
+                        end
                         return {
                             message = localize('$')..self.ability.extra.dollars,
                             colour = G.C.MONEY
@@ -4298,7 +4367,16 @@ function Card:calculate_joker(context)
                             if G.GAME.blind.triggered then 
                                 ease_dollars(self.ability.extra)
                                 G.GAME.dollar_buffer = (G.GAME.dollar_buffer or 0) + self.ability.extra
-                                if not Talisman.config_file.disable_anims then G.E_MANAGER:add_event(Event({func = (function() G.GAME.dollar_buffer = 0; return true end)})) else G.GAME.dollar_buffer = 0 end
+                                if not Handy.animation_skip.should_skip_messages() then
+                                  G.E_MANAGER:add_event(Event({
+                                    func = (function()
+                                      G.GAME.dollar_buffer = 0
+                                      return true
+                                    end)
+                                  }))
+                                else
+                                  Handy.animation_skip.request_dollars_buffer_reset()
+                                end
                                 return {
                                     message = localize('$')..self.ability.extra,
                                     colour = G.C.MONEY
@@ -5137,21 +5215,6 @@ function Card:draw(layer)
             G.shared_stickers['pinned']:draw_shader('dissolve', nil, nil, nil, self.children.center)
             G.shared_stickers['pinned']:draw_shader('voucher', nil, self.ARGS.send_to_shader, nil, self.children.center)
         end
-            if self.blueprint_sprite_copy and self.children.floating_sprite then
-                local scale_mod = 0.07 + 0.02*math.sin(1.8*G.TIMERS.REAL) + 0.00*math.sin((G.TIMERS.REAL - math.floor(G.TIMERS.REAL))*math.pi*14)*(1 - (G.TIMERS.REAL - math.floor(G.TIMERS.REAL)))^3
-                local rotate_mod = 0.05*math.sin(1.219*G.TIMERS.REAL) + 0.00*math.sin((G.TIMERS.REAL)*math.pi*5)*(1 - (G.TIMERS.REAL - math.floor(G.TIMERS.REAL)))^2
-        
-                if self.blueprint_copy_key == 'j_hologram' then
-                    self.hover_tilt = self.hover_tilt*1.5
-                    self.children.floating_sprite:draw_shader('hologram', nil, self.ARGS.send_to_shader, nil, self.children.center, 2*scale_mod, 2*rotate_mod)
-                    self.hover_tilt = self.hover_tilt/1.5
-                else
-                    self.children.floating_sprite:draw_shader('dissolve',0, nil, nil, self.children.center,scale_mod, rotate_mod,nil, 0.1 + 0.03*math.sin(1.8*G.TIMERS.REAL),nil, 0.6)
-                    self.children.floating_sprite:draw_shader('dissolve', nil, nil, nil, self.children.center, scale_mod, rotate_mod)
-                end
-                --self.children.floating_sprite:draw_shader('dissolve',   0, nil, nil, self.children.center, scale_mod, rotate_mod, nil, 0.1 + 0.03 * math.sin(1.8 * G.TIMERS.REAL), nil, 0.6)
-                --self.children.floating_sprite:draw_shader('dissolve', nil, nil, nil, self.children.center, scale_mod, rotate_mod)
-            end
         elseif self.sprite_facing == 'back' then
             local overlay = G.C.WHITE
             if self.area and self.area.config.type == 'deck' and self.rank > 3 then
@@ -5183,9 +5246,8 @@ function Card:draw(layer)
 
             if self.sticker and G.shared_stickers[self.sticker] then
                 G.shared_stickers[self.sticker].role.draw_major = self
-                local sticker_offset = self.sticker_offset or {}
-                G.shared_stickers[self.sticker]:draw_shader('dissolve', nil, nil, true, self.children.center, nil, self.sticker_rotation, sticker_offset.x, sticker_offset.y)
-                if self.sticker == 'Gold' or self.sticker == 'gold' then G.shared_stickers[self.sticker]:draw_shader('voucher', nil, self.ARGS.send_to_shader, true, self.children.center, nil, self.sticker_rotation, sticker_offset.x, sticker_offset.y) end
+                G.shared_stickers[self.sticker]:draw_shader('dissolve', nil, nil, true, self.children.center)
+                if self.sticker == 'Gold' then G.shared_stickers[self.sticker]:draw_shader('voucher', nil, self.ARGS.send_to_shader, true, self.children.center) end
             end
         end
 

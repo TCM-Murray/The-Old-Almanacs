@@ -39,6 +39,8 @@ SMODS.current_mod.config_tab = function()
     }}
 end
 
+SMODS.current_mod.togafork = true
+
 local function tablecontains(haystack, needle)
 	for k, v in pairs(haystack) do
 		if v == needle then
@@ -263,8 +265,10 @@ function Card:CanStack()
 		return false
 	elseif CFG.StackAnything then
 		return true
+	elseif self.config.center.can_stack ~= nil and (type(self.config.center.can_stack) == 'function' and not self.config.center:can_stack() or self.config.center.can_stack == false) then
+		return false
 	end
-
+	
 	return (self.config.center and (type(self.config.center.can_stack) == 'function' and self.config.center:can_stack() or self.config.center.can_stack)) or tablecontains(Incantation.Stackable, self.ability.set) or tablecontains(Incantation.StackableIndividual, self.config.center_key)
 end
 
@@ -292,7 +296,19 @@ function Card:getmaxuse()
 end
 
 function set_consumeable_usage(card, qty)
-	qty = math.floor(qty or 1)
+    qty = math.floor(qty or 1)
+    if (SMODS.Mods['Cryptid'] or {}).can_load then
+        if not G.GAME.cry_last_used_consumeables then G.GAME.cry_last_used_consumeables = {} end
+	if not G.GAME.cry_function_stupid_workaround then G.GAME.cry_function_stupid_workaround = {} end
+        for i = 1, #G.GAME.cry_last_used_consumeables do
+            G.GAME.cry_function_stupid_workaround[i] = G.GAME.cry_last_used_consumeables[i]
+        end
+        local nextindex = #G.GAME.cry_last_used_consumeables+1
+        G.GAME.cry_last_used_consumeables[nextindex] = card.config.center.key
+        if nextindex > 3 then
+            table.remove(G.GAME.cry_last_used_consumeables, 1)
+        end
+    end
     if card.config.center_key and card.ability.consumeable then
       if G.PROFILES[G.SETTINGS.profile].consumeable_usage[card.config.center_key] then
         G.PROFILES[G.SETTINGS.profile].consumeable_usage[card.config.center_key].count = G.PROFILES[G.SETTINGS.profile].consumeable_usage[card.config.center_key].count + qty

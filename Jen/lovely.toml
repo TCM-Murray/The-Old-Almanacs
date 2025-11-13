@@ -52,7 +52,13 @@ match_indent = true
 # payload = '''{n=G.UIT.C, config={align = "cm", padding = 0.01, r = 0.1, colour = G.C.HAND_LEVELS[number_format(G.GAME.hands[handname].level)] or G.C.WHITE, minw = 1.5, outline = 0.8, outline_colour = G.C.WHITE}, nodes={'''
 # match_indent = true
 
- 
+[[patches]]
+[patches.pattern]
+target = "engine/text.lua"
+pattern = "self.string = self.strings[self.focused_string].string"
+position = "at"
+payload = "if self.strings and self.focused_string and self.strings[self.focused_string] and self.strings[self.focused_string].string then self.string = self.strings[self.focused_string].string else return end"
+match_indent = true
 
 [[patches]]
 [patches.regex]
@@ -233,6 +239,58 @@ target = "functions/UI_definitions.lua"
 pattern = "label = {localize('b_play_cap')}"
 position = "at"
 payload = "label = {(Big and Big.arrow) and localize('b_play_cap') or 'OMEGANUM NOT ENABLED, GO TO TALISMAN SETTINGS'}"
+match_indent = true
+
+ 
+
+ 
+
+## cartomancer compatibility
+
+[[patches]]
+[patches.pattern]
+target = "functions/misc_functions.lua"
+pattern = "G.ARGS.score_intensity.organ = G.video_organ or to_big(G.ARGS.score_intensity.required_score) > to_big(0) and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0"
+position = "at"
+payload = '''
+if Big.arrow and G.GAME.blind and to_big(G.GAME.blind.chips or 0) > to_big(0) then
+	local notzero = to_big(G.ARGS.score_intensity.required_score) > to_big(0)
+	local e_s = to_big(G.ARGS.score_intensity.earned_score)
+	local r_s = to_big(G.ARGS.score_intensity.required_score+1)
+	local googol = to_big(1e100)
+	local requirement5 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(8, googol)), 5))),0.))
+	local requirement4 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(3, googol)), 5))),0.))
+	local requirement3 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(2, googol)), 5))),0.))
+	local requirement2 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s^googol), 5))),0.))
+	local requirement1 = math.max(math.min(1, 0.1*math.log(e_s/(r_s*1e100), 5)),0.)
+	if not G.ARGS.score_intensity.ambientDramatic then G.ARGS.score_intensity.ambientDramatic = 0 end
+	if not G.ARGS.score_intensity.ambientSinister then G.ARGS.score_intensity.ambientSinister = 0 end
+	if not G.ARGS.score_intensity.ambientSurreal3 then G.ARGS.score_intensity.ambientSurreal3 = 0 end
+	if not G.ARGS.score_intensity.ambientSurreal2 then G.ARGS.score_intensity.ambientSurreal2 = 0 end
+	if not G.ARGS.score_intensity.ambientSurreal1 then G.ARGS.score_intensity.ambientSurreal1 = 0 end
+	G.ARGS.score_intensity.ambientDramatic = notzero and requirement5:to_number() or 0
+	G.ARGS.score_intensity.ambientSinister = ((G.ARGS.score_intensity.ambientDramatic or 0) <= 0.05 and notzero) and requirement4:to_number() or 0
+	if Jen and type(Jen) == 'table' then
+		Jen.dramatic = G.ARGS.score_intensity.ambientDramatic > 0
+		Jen.sinister = G.ARGS.score_intensity.ambientSinister > 0 or Jen.dramatic
+	end
+	G.ARGS.score_intensity.ambientSurreal3 = (not Jen.dramatic and not Jen.sinister) and requirement3:to_number() or 0
+	G.ARGS.score_intensity.ambientSurreal2 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and notzero) and requirement2:to_number() or 0
+	G.ARGS.score_intensity.ambientSurreal1 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and notzero) and requirement1 or 0
+	G.ARGS.score_intensity.organ = (G.video_organ or ((G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal1 or 0) <= 0.05 and notzero)) and math.max(math.min(1, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
+	notzero = nil
+	e_s = nil
+	r_s = nil
+	googol = nil
+	requirement5 = nil
+	requirement4 = nil
+	requirement3 = nil
+	requirement2 = nil
+	requirement1 = nil
+else
+	G.ARGS.score_intensity.organ = G.video_organ or G.ARGS.score_intensity.required_score > 0 and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
+end
+'''
 match_indent = true
 
 [[patches]]
@@ -706,6 +764,126 @@ target = 'functions/button_callbacks.lua'
 pattern = 'e.config.object = Sprite(0, 0, 2.5, 2.5, G.ASSET_ATLAS["ui_1"], {x = 2, y = 0})'
 position = 'at'
 payload = 'e.config.object = Sprite(0, 0, 2.5, 1.25, G.ASSET_ATLAS["ui_1"], {x = 2, y = 0})'
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = 'functions/common_events.lua'
+pattern = "if type(vals.chips) == 'string' then delta = vals.chips end"
+position = 'before'
+payload = '''if vals.notifcol then
+	col = vals.notifcol
+else
+	if string.find(delta, '{', 1, true) and string.find(delta, '}', 1, true) then
+		col = G.C.jen_RGB
+	elseif string.find(delta, '^^^', 1, true) then
+		col = G.C.CRY_ASCENDANT
+	elseif string.find(delta, '^^', 1, true) then
+		col = G.C.CRY_VERDANT
+	elseif string.find(delta, '^', 1, true) then
+		col = G.C.SECONDARY_SET.Tarot
+	elseif string.find(delta, 'X', 1, true) or string.find(delta, 'x', 1, true) then
+		col = G.C.FILTER
+	elseif string.find(delta, '=', 1, true) then
+		col = G.C.GOLD
+	end
+end'''
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = 'functions/common_events.lua'
+pattern = "if type(vals.mult) == 'string' then delta = vals.mult end"
+position = 'before'
+payload = '''if vals.notifcol then
+	col = vals.notifcol
+else
+	if string.find(delta, '{', 1, true) and string.find(delta, '}', 1, true) then
+		col = G.C.jen_RGB
+	elseif string.find(delta, '^^^', 1, true) then
+		col = G.C.CRY_ASCENDANT
+	elseif string.find(delta, '^^', 1, true) then
+		col = G.C.CRY_VERDANT
+	elseif string.find(delta, '^', 1, true) then
+		col = G.C.SECONDARY_SET.Tarot
+	elseif string.find(delta, 'X', 1, true) or string.find(delta, 'x', 1, true) then
+		col = G.C.FILTER
+	elseif string.find(delta, '=', 1, true) then
+		col = G.C.GOLD
+	end
+end'''
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = 'functions/common_events.lua'
+pattern = '''
+            if vals.StatusText then 
+                attention_text({
+                    text =delta,
+                    scale = 0.8, 
+                    hold = 1,
+                    cover = G.hand_text_area.chips.parent,
+                    cover_colour = mix_colours(G.C.CHIPS, col, 0.1),
+                    emboss = 0.05,
+                    align = 'cm',
+                    cover_align = 'cr'
+                })
+            end'''
+position = 'at'
+payload = '''
+            if vals.StatusText then 
+                attention_text({
+                    text = delta,
+                    scale = 0.4 / (math.max(1, string.len(delta) - 20) ^ .1), 
+                    hold = 1,
+                    cover = G.hand_text_area.chips.parent,
+                    cover_colour = mix_colours(G.C.CHIPS, col, 0.3),
+                    emboss = 0.05,
+                    align = 'cm',
+                    cover_align = 'cr'
+                })
+            end'''
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = 'functions/common_events.lua'
+pattern = '''
+            if vals.StatusText then 
+                attention_text({
+                    text =delta,
+                    scale = 0.8, 
+                    hold = 1,
+                    cover = G.hand_text_area.mult.parent,
+                    cover_colour = mix_colours(G.C.MULT, col, 0.1),
+                    emboss = 0.05,
+                    align = 'cm',
+                    cover_align = 'cl'
+                })
+            end'''
+position = 'at'
+payload = '''
+            if vals.StatusText then 
+                attention_text({
+                    text = delta,
+                    scale = 0.4 / (math.max(1, string.len(delta) - 20) ^ .1), 
+                    hold = 1,
+                    cover = G.hand_text_area.mult.parent,
+                    cover_colour = mix_colours(G.C.MULT, col, 0.3),
+                    emboss = 0.05,
+                    align = 'cm',
+                    cover_align = 'cl'
+                })
+            end'''
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = 'engine/string_packer.lua'
+pattern = "save_string = love.data.compress('string', 'deflate', save_string, 1)"
+position = 'at'
+payload = "save_string = love.data.compress('string', 'deflate', save_string, math.max(1, math.min(((Jen or {}).config or {}).save_compression_level or 1, 9)))"
 match_indent = true
 
 # Fix for booster_obj nil crash

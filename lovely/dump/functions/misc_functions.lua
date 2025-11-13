@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'f17b8b69442bd564aba0787b0bf95dac7060553ae7276760e665c38f711ccdd7'
+LOVELY_INTEGRITY = 'f50e3644a14eb0e0110f99837efb773339049e9ac42b383e3a2188d30a6c1936'
 
 --Updates all display information for all displays for a given screenmode. Returns the key for the resolution option cycle
 --
@@ -672,7 +672,7 @@ function get_X_same(num, hand, or_more)
         table.insert(curr, hand[j])
       end
     end
-    if or_more and (#curr >= num) or (#curr == num) then
+    if or_more and (#curr >= num) or (next(SMODS.find_card("j_sdm_magic_hands")) and num > 2 and #curr == num - 1) or (#curr == num) then
       vals[curr[1]:get_id()] = curr
     end
   end
@@ -828,7 +828,43 @@ function modulate_sound(dt)
   end
   G.ARGS.score_intensity.flames = math.min(1, (G.STAGE == G.STAGES.RUN and 1 or 0)*(
     (G.ARGS.chip_flames and (G.ARGS.chip_flames.real_intensity + G.ARGS.chip_flames.change) or 0))/10)
-  G.ARGS.score_intensity.organ = G.video_organ or to_big(G.ARGS.score_intensity.required_score) > to_big(0) and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
+  if Big.arrow and G.GAME.blind and to_big(G.GAME.blind.chips or 0) > to_big(0) then
+  	local notzero = to_big(G.ARGS.score_intensity.required_score) > to_big(0)
+  	local e_s = to_big(G.ARGS.score_intensity.earned_score)
+  	local r_s = to_big(G.ARGS.score_intensity.required_score+1)
+  	local googol = to_big(1e100)
+  	local requirement5 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(8, googol)), 5))),0.))
+  	local requirement4 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(3, googol)), 5))),0.))
+  	local requirement3 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(2, googol)), 5))),0.))
+  	local requirement2 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s^googol), 5))),0.))
+  	local requirement1 = math.max(math.min(1, 0.1*math.log(e_s/(r_s*1e100), 5)),0.)
+  	if not G.ARGS.score_intensity.ambientDramatic then G.ARGS.score_intensity.ambientDramatic = 0 end
+  	if not G.ARGS.score_intensity.ambientSinister then G.ARGS.score_intensity.ambientSinister = 0 end
+  	if not G.ARGS.score_intensity.ambientSurreal3 then G.ARGS.score_intensity.ambientSurreal3 = 0 end
+  	if not G.ARGS.score_intensity.ambientSurreal2 then G.ARGS.score_intensity.ambientSurreal2 = 0 end
+  	if not G.ARGS.score_intensity.ambientSurreal1 then G.ARGS.score_intensity.ambientSurreal1 = 0 end
+  	G.ARGS.score_intensity.ambientDramatic = notzero and requirement5:to_number() or 0
+  	G.ARGS.score_intensity.ambientSinister = ((G.ARGS.score_intensity.ambientDramatic or 0) <= 0.05 and notzero) and requirement4:to_number() or 0
+  	if Jen and type(Jen) == 'table' then
+  		Jen.dramatic = G.ARGS.score_intensity.ambientDramatic > 0
+  		Jen.sinister = G.ARGS.score_intensity.ambientSinister > 0 or Jen.dramatic
+  	end
+  	G.ARGS.score_intensity.ambientSurreal3 = (not Jen.dramatic and not Jen.sinister) and requirement3:to_number() or 0
+  	G.ARGS.score_intensity.ambientSurreal2 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and notzero) and requirement2:to_number() or 0
+  	G.ARGS.score_intensity.ambientSurreal1 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and notzero) and requirement1 or 0
+  	G.ARGS.score_intensity.organ = (G.video_organ or ((G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal1 or 0) <= 0.05 and notzero)) and math.max(math.min(1, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
+  	notzero = nil
+  	e_s = nil
+  	r_s = nil
+  	googol = nil
+  	requirement5 = nil
+  	requirement4 = nil
+  	requirement3 = nil
+  	requirement2 = nil
+  	requirement1 = nil
+  else
+  	G.ARGS.score_intensity.organ = G.video_organ or G.ARGS.score_intensity.required_score > 0 and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
+  end
 
   local AC = G.SETTINGS.ambient_control
   G.ARGS.ambient_sounds = G.ARGS.ambient_sounds or {
@@ -1485,12 +1521,6 @@ function set_discover_tallies()
   
   for _, v in pairs(G.P_CENTERS) do
     if not v.omit and not v.no_collection then
-      if v.set and v.set == 'Sleeve' then
-          G.DISCOVER_TALLIES.total.of = G.DISCOVER_TALLIES.total.of + 1
-          if v.unlocked then
-              G.DISCOVER_TALLIES.total.tally = G.DISCOVER_TALLIES.total.tally + 1
-          end
-      end
       if v.set and ((v.set == 'Joker') or v.consumeable or (v.set == 'Edition') or (v.set == 'Voucher') or (v.set == 'Back') or (v.set == 'Booster')) then
         G.DISCOVER_TALLIES.total.of = G.DISCOVER_TALLIES.total.of+1
         if v.discovered then 

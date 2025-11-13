@@ -67,8 +67,36 @@ function global.trim(string)
     return string:match("^%s*(.-)%s*$")
 end
 
+function global.split(str, sep)
+    if not sep then
+        sep = ","
+    end
+    local pattern = "([^"..sep.."]+)"
+    if sep == "" then
+        pattern = "."
+    end
+    local t = {}
+    for str in string.gmatch(str, pattern) do
+        table.insert(t, str)
+    end
+    return t
+end
+
 function global.pack(...) -- TODO: Might be nice to make a version of ipairs that uses this
     return { n = select("#", ...), ... }
+end
+
+function global.unescapeSimple(str)
+    local r = str:gsub("\\(.?)", {
+	["\\"] = "\\",
+	n = "\n",
+	r = "\r"
+    })
+    return r
+end
+
+function global.escapeSimple(str)
+    return str:gsub("\\", "\\\\"):gsub("\n", "\\n"):gsub("\r", "\\r")
 end
 
 return global

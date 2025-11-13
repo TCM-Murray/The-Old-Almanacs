@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'fc8754f159e5c1b8167bdd73e7f6dd775a717f963ee992d947a2f26e9844a3ae'
+LOVELY_INTEGRITY = '617470e4355658f5ff9243ade1a3a1bd0e6cb37e9d40041c0a7ce6879ad4f8c7'
 
 --Class
 DynaText = Moveable:extend()
@@ -222,7 +222,7 @@ function DynaText:align_letters()
         self.config.pop_out = nil
         self.created_time = G.TIMERS.REAL
     end
-    self.string = self.strings[self.focused_string].string
+    if self.strings and self.focused_string and self.strings[self.focused_string] and self.strings[self.focused_string].string then self.string = self.strings[self.focused_string].string else return end
     for k, letter in ipairs(self.strings[self.focused_string].letters) do
     if Big then
     	letter.dims.x = to_number(letter.dims.x)

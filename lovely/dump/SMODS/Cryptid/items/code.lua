@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'e39c577a2715cc3f21a474e423997c8c95e20cb68bbfb51af21c02d4d3245c62'
+LOVELY_INTEGRITY = '6b5cc598f41e979da66669b49a156400cd18b2715b27c46833ce3689d98b2d40'
 
 local code = {
 	object_type = "ConsumableType",
@@ -8,7 +8,7 @@ local code = {
 	collection_rows = { 4, 4 }, -- 4 pages for all code cards
 	shop_rate = 0.0,
 	loc_txt = {},
-	default = "c_cry_oboe",
+	default = "c_cry_crash",
 	can_stack = true,
 	can_divide = true,
 	select_card = "consumeables",
@@ -4196,6 +4196,9 @@ local delete = {
 		end
 
 		G.GAME.cry_banished_keys[c.config.center.key] = true
+		    if c.config.center.key == "j_cry_blurred" then
+				check_for_unlock({type = "good_riddance"})
+			end
 
 		if not not c.base.value then -- is there a case where ~= nil would fail here?
 			for k, v in pairs(G.P_CARDS) do

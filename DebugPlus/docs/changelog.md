@@ -1,3 +1,24 @@
+# DebugPlus 1.5.1
+
+## Fixes
+- Fixed a bug where the crash handler would not receive keyboard input when "Console In Crash Handler" is enabled.
+
+# DebugPlus 1.5.0
+
+## Features
+- Added a new text input to the console
+  - There is now a cursor and it can be moved using left and right (and jumped with shift + left and shift + right)
+  - You may now delete words with shift + backspace (and shift + del)
+  - Hopefully fixed some weirdness with the old input
+- The console's command history is now saved to a file and remebered when you restart the game.
+  - There is a new option "Store Command History" to disable this behaviour if you so desire.
+- 🥔
+
+## Fixes
+- Fix an issue where the console key would not be useable on some keyboard layouts
+- Fixed an issue where cards were not properly calculated when being removed with SMODS present
+- Improved compatibiltiy with mods hooking love.keypressed
+
 # DebugPlus 1.4.2
 
 ## Fixes
