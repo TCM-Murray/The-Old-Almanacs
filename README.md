@@ -1,6 +1,9 @@
 # Jen Almanac's Modpack Development
 
-This repository is for the development and version management of the "Jen Almanac's" Balatro modpack. It contains several branches, each representing a different version or stage of the modpack.
+This repository is for the development and version management of the "Jen Almanac's" Balatro modpack. 
+It contains several branches, each representing a different version or stage of the modpack.
+
+This repository has only bugfixes in mind. I do not have in mind to add new mods or support them. I will only fix bugs that come from the main branch.
 
 ## Branches
 
