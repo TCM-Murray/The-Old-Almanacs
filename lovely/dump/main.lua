@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '3814a6eb410db20e3a013ebcfb8aecc58e1d3652cde92d4ec163adf4d818408a'
+LOVELY_INTEGRITY = '1a8aa5f2d2d3c39d154667a04b92f7d000f10a8b02e77e84ce4779c37dc16421'
 
 --- STEAMODDED CORE
 --- MODULE STACKTRACE
@@ -675,6 +675,18 @@ function injectStackTrace()
             table.insert(err, "Invalid UTF-8 string in error message.")
         end
 
+        if V and SMODS and SMODS.save_game and V(SMODS.save_game or '0.0.0') ~= V(SMODS.version or '0.0.0') then
+            table.insert(err, 'This crash may be caused by continuing a run that was started on a previous version of Steamodded. Try creating a new run.')
+        end
+
+        if V and V(MODDED_VERSION or '0.0.0') ~= V(RELEASE_VERSION or '0.0.0') then
+            table.insert(err, '\n\nDevelopment version of Steamodded detected! If you are not actively developing a mod, please try using the latest release instead.\n\n')
+        end
+
+        if not V then
+            table.insert(err, '\nA bad lovely patch has resulted in this crash.\n')
+        end
+
         local success, msg = pcall(getDebugInfoForCrash)
         if success and msg then
             table.insert(err, '\n' .. msg)
@@ -953,6 +965,13 @@ Cryptid.aliases = {}
 Cryptid.pointerblist = {}
 Cryptid.pointerblistrarity = {}
 Cryptid.mod_gameset_whitelist = {}
+Cryptid.ascension_numbers = {}
+
+Cryptid.pin_debuff = {}
+Cryptid.circus_rarities = {
+	--format {base_mult = ..., loc_key = ..., rarity=..., order=...}
+}
+
 function cry_format(...)
 	return ...
 end
@@ -962,7 +981,6 @@ Cryptid.memepack = {}
 Cryptid.food = {}
 Cryptid.M_jokers = {}
 Cryptid.Megavouchers = {}
-Jen = {}
 function love.load() 
 	G:start_up()
 	--Steam integration
@@ -1288,6 +1306,7 @@ end
 
 SMODS = {}
 MODDED_VERSION = require'SMODS.version'
+RELEASE_VERSION = require'SMODS.release'
 SMODS.id = 'Steamodded'
 SMODS.version = MODDED_VERSION:gsub('%-STEAMODDED', '')
 SMODS.can_load = true
@@ -4536,9 +4555,15 @@ end
 local lovely = require("lovely")
 local nativefs = require("nativefs")
 
-if not nativefs.getInfo(lovely.mod_dir .. "/Talisman") then
+local info = nativefs.getDirectoryItemsInfo(lovely.mod_dir)
+local talisman_path = ""
+for i, v in pairs(info) do
+  if v.type == "directory" and nativefs.getInfo(lovely.mod_dir .. "/" .. v.name .. "/talisman.lua") then talisman_path = lovely.mod_dir .. "/" .. v.name end
+end
+
+if not nativefs.getInfo(talisman_path) then
     error(
-        'Could not find proper Talisman folder.\nPlease make sure the folder for Talisman is named exactly "Talisman" and not "Talisman-main" or anything else.')
+        'Could not find proper Talisman folder.\nPlease make sure that Talisman is installed correctly and the folders arent nested.')
 end
 
 -- "Borrowed" from Trance
@@ -4556,8 +4581,8 @@ end
 local talismanloc = init_localization
 function init_localization()
 	local abc = load_file_with_fallback2(
-		lovely.mod_dir .. "/Talisman/localization/" .. (G.SETTINGS.language or "en-us") .. ".lua",
-		lovely.mod_dir .. "/Talisman/localization/en-us.lua"
+		talisman_path.."/localization/" .. (G.SETTINGS.language or "en-us") .. ".lua",
+		talisman_path .. "/localization/en-us.lua"
 	)
 	for k, v in pairs(abc) do
 		if k ~= "descriptions" then
@@ -4569,10 +4594,14 @@ function init_localization()
 	talismanloc()
 end
 
-Talisman = {config_file = {disable_anims = true, break_infinity = "omeganum", score_opt_id = 2}}
-if nativefs.read(lovely.mod_dir.."/Talisman/config.lua") then
-    Talisman.config_file = STR_UNPACK(nativefs.read(lovely.mod_dir.."/Talisman/config.lua"))
-
+Talisman = {config_file = {disable_anims = false, break_infinity = "omeganum", score_opt_id = 2}, mod_path = talisman_path}
+if nativefs.read(talisman_path.."/config.lua") then
+    Talisman.config_file = STR_UNPACK(nativefs.read(talisman_path.."/config.lua"))
+    if Talisman.config_file.break_infinity == "bignumber" then
+      Talisman.config_file.break_infinity = "omeganum"
+      Talisman.config_file.score_opt_id = 2
+    end
+    if Talisman.config_file.score_opt_id == 3 then Talisman.config_file.score_opt_id = 2 end
     if Talisman.config_file.break_infinity and type(Talisman.config_file.break_infinity) ~= 'string' then
       Talisman.config_file.break_infinity = "omeganum"
     end
@@ -4599,13 +4628,13 @@ Talisman.config_tab = function()
                   {n=G.UIT.O, config={object = DynaText({string = localize("talisman_string_A"), colours = {G.C.WHITE}, shadow = true, scale = 0.4})}},
                 }},create_toggle({label = localize("talisman_string_B"), ref_table = Talisman.config_file, ref_value = "disable_anims",
                 callback = function(_set_toggle)
-	                nativefs.write(lovely.mod_dir .. "/Talisman/config.lua", STR_PACK(Talisman.config_file))
+	                nativefs.write(talisman_path .. "/config.lua", STR_PACK(Talisman.config_file))
                 end}),
                 create_option_cycle({
                   label = localize("talisman_string_C"),
                   scale = 0.8,
                   w = 6,
-                  options = {localize("talisman_vanilla"), localize("talisman_bignum"), localize("talisman_omeganum") .. "(e10##1000)"},
+                  options = {localize("talisman_vanilla"), localize("talisman_omeganum") .. "(e10##1000)"},
                   opt_callback = 'talisman_upd_score_opt',
                   current_option = Talisman.config_file.score_opt_id,
                 })}
@@ -4643,14 +4672,14 @@ G.FUNCS.talismanMenu = function(e)
 end
 G.FUNCS.talisman_upd_score_opt = function(e)
   Talisman.config_file.score_opt_id = e.to_key
-  local score_opts = {"", "bignumber", "omeganum"}
+  local score_opts = {"", "omeganum"}
   Talisman.config_file.break_infinity = score_opts[e.to_key]
-  nativefs.write(lovely.mod_dir .. "/Talisman/config.lua", STR_PACK(Talisman.config_file))
+  nativefs.write(talisman_path .. "/config.lua", STR_PACK(Talisman.config_file))
 end
 if Talisman.config_file.break_infinity then
-  Big, err = nativefs.load(lovely.mod_dir.."/Talisman/big-num/"..Talisman.config_file.break_infinity..".lua")
+  Big, err = nativefs.load(talisman_path.."/big-num/"..Talisman.config_file.break_infinity..".lua")
   if not err then Big = Big() else Big = nil end
-  Notations = nativefs.load(lovely.mod_dir.."/Talisman/big-num/notations.lua")()
+  Notations = nativefs.load(talisman_path.."/big-num/notations.lua")()
   -- We call this after init_game_object to leave room for mods that add more poker hands
   Talisman.igo = function(obj)
       for _, v in pairs(obj.hands) do
@@ -4669,9 +4698,15 @@ if Talisman.config_file.break_infinity then
   local nf = number_format
   function number_format(num, e_switch_point)
       if type(num) == 'table' then
-          num = to_big(num)
+          --num = to_big(num)
+          if num.str then return num.str end
+          if num:arraySize() > 2 then
+            local str = Notations.Balatro:format(num, 3)
+            num.str = str
+            return str
+          end
           G.E_SWITCH_POINT = G.E_SWITCH_POINT or 100000000000
-          if num < to_big(e_switch_point or G.E_SWITCH_POINT) then
+          if (num or 0) < (to_big(G.E_SWITCH_POINT) or 0) then
               return nf(num:to_number(), e_switch_point)
           else
             return Notations.Balatro:format(num, 3)
@@ -4681,7 +4716,7 @@ if Talisman.config_file.break_infinity then
 
   local mf = math.floor
   function math.floor(x)
-      if type(x) == 'table' then return x:floor() end
+      if type(x) == 'table' then return x.floor and x:floor() or x end
       return mf(x)
   end
   local mc = math.ceil
@@ -4790,7 +4825,7 @@ function lenient_bignum(x)
   -- Note that any ante scaling tweaks will need to manually changed...
   local gba = get_blind_amount
   function get_blind_amount(ante)
-    if G.GAME.modifiers.scaling and G.GAME.modifiers.scaling > 3 then return SMODS.get_blind_amount(ante) end
+    if G.GAME.modifiers.scaling and (G.GAME.modifiers.scaling ~= 1 and G.GAME.modifiers.scaling ~= 2 and G.GAME.modifiers.scaling ~= 3) then return SMODS.get_blind_amount(ante) end
     if type(to_big(1)) == 'number' then return gba(ante) end
       local k = to_big(0.75)
       if not G.GAME.modifiers.scaling or G.GAME.modifiers.scaling == 1 then 
@@ -4874,24 +4909,35 @@ function lenient_bignum(x)
   local sn = scale_number
   function scale_number(number, scale, max, e_switch_point)
     if not Big then return sn(number, scale, max, e_switch_point) end
-    scale = to_big(scale)
+    if type(scale) ~= "table" then scale = to_big(scale) end
+    if type(number) ~= "table" then number = Big:ensureBig(number) end
+    if number.scale then return number.scale end
     G.E_SWITCH_POINT = G.E_SWITCH_POINT or 100000000000
     if not number or not is_number(number) then return scale end
     if not max then max = 10000 end
-    if to_big(number).e and to_big(number).e == 10^1000 then
+    if type(number) ~= "table" then math.min(3, scale:to_number()) end
+    if number.e and number.e == 10^1000 then
       scale = scale*math.floor(math.log(max*10, 10))/7
     end
-    if to_big(number) >= to_big(e_switch_point or G.E_SWITCH_POINT) then
-      if (to_big(to_big(number):log10()) <= to_big(999)) then
-        scale = scale*math.floor(math.log(max*10, 10))/math.floor(math.log(1000000*10, 10))
+    if not e_switch_point and number:arraySize() > 2 then --this is noticable faster than >= on the raw number for some reason
+      if number:arraySize() <= 2 and (number.array[1] or 0) <= 999 then --gross hack
+        scale = scale*math.floor(math.log(max*10, 10))/7 --this divisor is a constant so im precalcualting it
+      else
+        scale = scale*math.floor(math.log(max*10, 10))/math.floor(math.max(7,string.len(number.str or number_format(number))-1))
+      end
+    elseif to_big(number) >= to_big(e_switch_point or G.E_SWITCH_POINT) then
+      if number:arraySize() <= 2 and (number.array[1] or 0) <= 999 then --gross hack
+        scale = scale*math.floor(math.log(max*10, 10))/7 --this divisor is a constant so im precalcualting it
       else
         scale = scale*math.floor(math.log(max*10, 10))/math.floor(math.max(7,string.len(number_format(number))-1))
       end
     elseif to_big(number) >= to_big(max) then
       scale = scale*math.floor(math.log(max*10, 10))/math.floor(math.log(number*10, 10))
     end
-    return math.min(3, scale:to_number())
-  end
+    local scale = math.min(3, scale:to_number())
+    number.scale = scale
+    return scale
+   end
 
   local tsj = G.FUNCS.text_super_juice
   function G.FUNCS.text_super_juice(e, _amount)
@@ -4964,7 +5010,8 @@ function to_big(x, y)
   if type(x) == 'string' and x == "0" then --hack for when 0 is asked to be a bignumber need to really figure out the fix
     return 0
   elseif Big and Big.m then
-    return Big:new(x,y)
+    local x = Big:new(x,y)
+    return x
   elseif Big and Big.array then
     local result = Big:create(x)
     result.sign = y or result.sign or x.sign or 1
@@ -4990,6 +5037,18 @@ function to_number(x)
   else
     return x
   end
+end
+
+function uncompress_big(str, sign)
+    local curr = 1
+    local array = {}
+    for i, v in pairs(str) do
+        for i2 = 1, v[2] do
+            array[curr] = v[1]
+            curr = curr + 1
+        end
+    end
+    return to_big(array, y)
 end
 
 --patch to remove animations
@@ -5041,7 +5100,7 @@ function tal_uht(config, vals)
         else
             G.GAME.current_round.current_hand.hand_level = ' '..localize('k_lvl')..tostring(vals.level)
             if is_number(vals.level) then
-                G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[type(vals.level) == "number" and math.floor(math.min(vals.level, 7)) or math.floor(to_big(math.min(vals.level, 7))):to_number()]
+                G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[type(vals.level) == "number" and math.floor(math.min(vals.level, 7)) or math.floor(to_number(math.min(vals.level, 7)))]
             else
                 G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[1]
             end
@@ -5274,11 +5333,13 @@ function Card:set_seal(a,b,immediate)
   return ss(self,a,b,Talisman.config_file.disable_anims and (Talisman.calculating_joker or Talisman.calculating_score or Talisman.calculating_card) or immediate)
 end
 
-function Card:get_chip_x_bonus()
-    if self.debuff then return 0 end
-    if self.ability.set == 'Joker' then return 0 end
-    if (SMODS.multiplicative_stacking(self.ability.x_chips or 1, self.ability.perma_x_chips or 0) or 0) <= 1 then return 0 end
-    return SMODS.multiplicative_stacking(self.ability.x_chips or 1, self.ability.perma_x_chips or 0)
+if not SMODS then
+  function Card:get_chip_x_bonus()
+      if self.debuff then return 0 end
+      if self.ability.set == 'Joker' then return 0 end
+      if (self.ability.x_chips or 0) <= 1 then return 0 end
+      return self.ability.x_chips
+  end
 end
 
 function Card:get_chip_e_bonus()
@@ -5345,7 +5406,7 @@ local edo = ease_dollars
 function ease_dollars(mod, instant)
   if Talisman.config_file.disable_anims then--and (Talisman.calculating_joker or Talisman.calculating_score or Talisman.calculating_card) then
     mod = mod or 0
-    if to_big(mod) < to_big(0) then inc_career_stat('c_dollars_earned', mod) end
+    if to_big(mod) > to_big(0) then inc_career_stat('c_dollars_earned', mod) end
     G.GAME.dollars = G.GAME.dollars + mod
     Talisman.dollar_update = true
   else return edo(mod, instant) end
@@ -5355,7 +5416,7 @@ local su = G.start_up
 function safe_str_unpack(str)
   local chunk, err = loadstring(str)
   if chunk then
-    setfenv(chunk, {Big = Big, BigMeta = BigMeta, OmegaMeta = OmegaMeta, to_big = to_big, inf = 1.79769e308})  -- Use an empty environment to prevent access to potentially harmful functions
+    setfenv(chunk, {Big = Big, BigMeta = BigMeta, OmegaMeta = OmegaMeta, to_big = to_big, inf = 1.79769e308, uncompress_big=uncompress_big})  -- Use an empty environment to prevent access to potentially harmful functions
     local success, result = pcall(chunk)
     if success then
     return result
@@ -5404,13 +5465,6 @@ end
 
 -- Steamodded calculation API: add extra operations
 if SMODS and SMODS.calculate_individual_effect then
-  local smods_xchips = false
-  for _, v in pairs(SMODS.calculation_keys) do
-    if v == 'x_chips' then
-      smods_xchips = true
-      break
-    end
-  end
   local scie = SMODS.calculate_individual_effect
   function SMODS.calculate_individual_effect(effect, scored_card, key, amount, from_edition)
     -- For some reason, some keys' animations are completely removed
@@ -5422,162 +5476,185 @@ if SMODS and SMODS.calculate_individual_effect then
     if ret then
       return ret
     end
-    if not smods_xchips and (key == 'x_chips' or key == 'xchips' or key == 'Xchip_mod') and amount ~= 1 then 
-      if effect.card then juice_card(effect.card) end
-      hand_chips = mod_chips(hand_chips * amount)
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
-      if not effect.remove_default_message then
-          if from_edition then
-              card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = "X"..amount, colour =  G.C.EDITION, edition = true})
-          elseif key ~= 'Xchip_mod' then
-              if effect.xchip_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.xchip_message)
-              else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'x_chips', amount, percent)
-              end
-          end
-      end
-      return true
-    end
 
-    if (key == 'e_chips' or key == 'echips' or key == 'Echip_mod') and amount ~= 1 then 
+    if (key == 'e_chips' or key == 'echips' or key == 'Echip_mod') and amount ~= 1 then
       if effect.card then juice_card(effect.card) end
-      hand_chips = mod_chips(hand_chips ^ amount)
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      if SMODS.Scoring_Parameters then
+        local chips = SMODS.Scoring_Parameters["chips"]
+        chips:modify(chips.current ^ amount - chips.current)
+      else
+        hand_chips = mod_chips(hand_chips ^ amount)
+        update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      end
       if not effect.remove_default_message then
           if from_edition then
               card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = "^"..amount, colour =  G.C.EDITION, edition = true})
           elseif key ~= 'Echip_mod' then
               if effect.echip_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.echip_message)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.echip_message)
               else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'e_chips', amount, percent)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'e_chips', amount, percent)
               end
           end
       end
       return true
     end
 
-    if (key == 'ee_chips' or key == 'eechips' or key == 'EEchip_mod') and amount ~= 1 then 
+    if (key == 'ee_chips' or key == 'eechips' or key == 'EEchip_mod') and amount ~= 1 then
       if effect.card then juice_card(effect.card) end
-      hand_chips = mod_chips(hand_chips:arrow(2, amount))
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      if SMODS.Scoring_Parameters then
+        local chips = SMODS.Scoring_Parameters["chips"]
+        chips:modify(to_big(chips.current):tetrate(amount) - chips.current)
+      else
+        hand_chips = mod_chips(hand_chips:tetrate(amount))
+        update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      end
       if not effect.remove_default_message then
           if from_edition then
               card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = "^^"..amount, colour =  G.C.EDITION, edition = true})
           elseif key ~= 'EEchip_mod' then
               if effect.eechip_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.eechip_message)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.eechip_message)
               else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'ee_chips', amount, percent)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'ee_chips', amount, percent)
               end
           end
       end
       return true
     end
 
-    if (key == 'eee_chips' or key == 'eeechips' or key == 'EEEchip_mod') and amount ~= 1 then 
+    if (key == 'eee_chips' or key == 'eeechips' or key == 'EEEchip_mod') and amount ~= 1 then
       if effect.card then juice_card(effect.card) end
-      hand_chips = mod_chips(hand_chips:arrow(3, amount))
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      if SMODS.Scoring_Parameters then
+        local chips = SMODS.Scoring_Parameters["chips"]
+        chips:modify(to_big(chips.current):arrow(3, amount) - chips.current)
+      else
+        hand_chips = mod_chips(hand_chips:arrow(3, amount))
+        update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      end
       if not effect.remove_default_message then
           if from_edition then
               card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = "^^^"..amount, colour =  G.C.EDITION, edition = true})
           elseif key ~= 'EEEchip_mod' then
               if effect.eeechip_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.eeechip_message)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.eeechip_message)
               else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'eee_chips', amount, percent)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'eee_chips', amount, percent)
               end
           end
       end
       return true
     end
 
-    if (key == 'hyper_chips' or key == 'hyperchips' or key == 'hyperchip_mod') and type(amount) == 'table' then 
+    if (key == 'hyper_chips' or key == 'hyperchips' or key == 'hyperchip_mod') and type(amount) == 'table' then
       if effect.card then juice_card(effect.card) end
-      hand_chips = mod_chips(hand_chips:arrow(amount[1], amount[2]))
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      if SMODS.Scoring_Parameters then
+        local chips = SMODS.Scoring_Parameters["chips"]
+        chips:modify(to_big(chips.current):arrow(amount[1], amount[2]) - chips.current)
+      else
+        hand_chips = mod_chips(hand_chips:arrow(amount[1], amount[2]))
+        update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      end
       if not effect.remove_default_message then
           if from_edition then
               card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = (amount[1] > 5 and ('{' .. amount[1] .. '}') or string.rep('^', amount[1])) .. amount[2], colour =  G.C.EDITION, edition = true})
           elseif key ~= 'hyperchip_mod' then
               if effect.hyperchip_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.hyperchip_message)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.hyperchip_message)
               else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'hyper_chips', amount, percent)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'hyper_chips', amount, percent)
               end
           end
       end
       return true
     end
 
-    if (key == 'e_mult' or key == 'emult' or key == 'Emult_mod') and amount ~= 1 then 
+    if (key == 'e_mult' or key == 'emult' or key == 'Emult_mod') and amount ~= 1 then
       if effect.card then juice_card(effect.card) end
-      mult = mod_mult(mult ^ amount)
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      if SMODS.Scoring_Parameters then
+        local mult = SMODS.Scoring_Parameters["mult"]
+        mult:modify(mult.current ^ amount - mult.current)
+      else
+        mult = mod_mult(mult ^ amount)
+        update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      end
       if not effect.remove_default_message then
           if from_edition then
               card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = "^"..amount.." "..localize("k_mult"), colour =  G.C.EDITION, edition = true})
           elseif key ~= 'Emult_mod' then
               if effect.emult_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.emult_message)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.emult_message)
               else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'e_mult', amount, percent)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'e_mult', amount, percent)
               end
           end
       end
       return true
     end
 
-    if (key == 'ee_mult' or key == 'eemult' or key == 'EEmult_mod') and amount ~= 1 then 
+    if (key == 'ee_mult' or key == 'eemult' or key == 'EEmult_mod') and amount ~= 1 then
       if effect.card then juice_card(effect.card) end
-      mult = mod_mult(mult:arrow(2, amount))
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      if SMODS.Scoring_Parameters then
+        local mult = SMODS.Scoring_Parameters["mult"]
+        mult:modify(to_big(mult.current):arrow(2, amount) - mult.current)
+      else
+        mult = mod_mult(mult:arrow(2, amount))
+        update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      end
       if not effect.remove_default_message then
           if from_edition then
               card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = "^^"..amount.." "..localize("k_mult"), colour =  G.C.EDITION, edition = true})
           elseif key ~= 'EEmult_mod' then
               if effect.eemult_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.eemult_message)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.eemult_message)
               else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'ee_mult', amount, percent)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'ee_mult', amount, percent)
               end
           end
       end
       return true
     end
 
-    if (key == 'eee_mult' or key == 'eeemult' or key == 'EEEmult_mod') and amount ~= 1 then 
+    if (key == 'eee_mult' or key == 'eeemult' or key == 'EEEmult_mod') and amount ~= 1 then
       if effect.card then juice_card(effect.card) end
-      mult = mod_mult(mult:arrow(3, amount))
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      if SMODS.Scoring_Parameters then
+        local mult = SMODS.Scoring_Parameters["mult"]
+        mult:modify(to_big(mult.current):arrow(3, amount) - mult.current)
+      else
+        mult = mod_mult(mult:arrow(3, amount))
+        update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      end
       if not effect.remove_default_message then
           if from_edition then
               card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = "^^^"..amount.." "..localize("k_mult"), colour =  G.C.EDITION, edition = true})
           elseif key ~= 'EEEmult_mod' then
               if effect.eeemult_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.eeemult_message)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.eeemult_message)
               else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'eee_mult', amount, percent)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'eee_mult', amount, percent)
               end
           end
       end
       return true
     end
 
-    if (key == 'hyper_mult' or key == 'hypermult' or key == 'hypermult_mod') and type(amount) == 'table' then 
+    if (key == 'hyper_mult' or key == 'hypermult' or key == 'hypermult_mod') and type(amount) == 'table' then
       if effect.card then juice_card(effect.card) end
-      mult = mod_mult(mult:arrow(amount[1], amount[2]))
-      update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      if SMODS.Scoring_Parameters then
+        local mult = SMODS.Scoring_Parameters["mult"]
+        mult:modify(to_big(mult.current):arrow(amount[1], amount[2]) - mult.current)
+      else
+        mult = mod_mult(mult:arrow(amount[1], amount[2]))
+        update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
+      end
       if not effect.remove_default_message then
           if from_edition then
               card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = ((amount[1] > 5 and ('{' .. amount[1] .. '}') or string.rep('^', amount[1])) .. amount[2]).." "..localize("k_mult"), colour =  G.C.EDITION, edition = true})
           elseif key ~= 'hypermult_mod' then
               if effect.hypermult_message then
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.hypermult_message)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'extra', nil, percent, nil, effect.hypermult_message)
               else
-                  card_eval_status_text(scored_card or effect.card or effect.focus, 'hyper_mult', amount, percent)
+                  card_eval_status_text(effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus, 'hyper_mult', amount, percent)
               end
           end
       end
@@ -5587,12 +5664,7 @@ if SMODS and SMODS.calculate_individual_effect then
   for _, v in ipairs({'e_mult', 'e_chips', 'ee_mult', 'ee_chips', 'eee_mult', 'eee_chips', 'hyper_mult', 'hyper_chips',
                       'emult', 'echips', 'eemult', 'eechips', 'eeemult', 'eeechips', 'hypermult', 'hyperchips',
                       'Emult_mod', 'Echip_mod', 'EEmult_mod', 'EEchip_mod', 'EEEmult_mod', 'EEEchip_mod', 'hypermult_mod', 'hyperchip_mod'}) do
-    table.insert(SMODS.calculation_keys, v)
-  end
-  if not smods_xchips then
-    for _, v in ipairs({'x_chips', 'xchips', 'Xchip_mod'}) do
-    table.insert(SMODS.calculation_keys, v)
-  end
+    table.insert(SMODS.scoring_parameter_keys or SMODS.calculation_keys, v)
   end
 
   -- prvent juice animations
@@ -5838,17 +5910,20 @@ Cartomancer.path = assert(
     "Failed to find mod folder. Make sure that `Cartomancer` folder has `cartomancer.lua` file!"
 )
 
-Cartomancer.load_mod_file('internal/config.lua', 'internal.config')
-Cartomancer.load_mod_file('internal/atlas.lua', 'internal.atlas')
-Cartomancer.load_mod_file('internal/ui.lua', 'internal.ui')
-Cartomancer.load_mod_file('internal/keybinds.lua', 'internal.keybinds')
+Cartomancer.load_mod_file('internal/config.lua', 'cartomancer.config')
+Cartomancer.load_mod_file('internal/atlas.lua', 'cartomancer.atlas')
+Cartomancer.load_mod_file('internal/ui.lua', 'cartomancer.ui')
+Cartomancer.load_mod_file('internal/keybinds.lua', 'cartomancer.keybinds')
 
-Cartomancer.load_mod_file('core/view-deck.lua', 'core.view-deck')
-Cartomancer.load_mod_file('core/flames.lua', 'core.flames')
-Cartomancer.load_mod_file('core/optimizations.lua', 'core.optimizations')
-Cartomancer.load_mod_file('core/jokers.lua', 'core.jokers')
-Cartomancer.load_mod_file('core/hand.lua', 'core.hand')
-Cartomancer.load_mod_file('core/blinds_info.lua', 'core.blinds_info')
+Cartomancer.load_mod_file('core/view-deck.lua', 'cartomancer.view-deck')
+Cartomancer.load_mod_file('core/flames.lua', 'cartomancer.flames')
+Cartomancer.load_mod_file('core/optimizations.lua', 'cartomancer.optimizations')
+Cartomancer.load_mod_file('core/jokers.lua', 'cartomancer.jokers')
+Cartomancer.load_mod_file('core/hand.lua', 'cartomancer.hand')
+Cartomancer.load_mod_file('core/blinds_info.lua', 'cartomancer.blinds_info')
+if SMODS then
+    Cartomancer.load_mod_file('core/view-deck-steamodded.lua', 'cartomancer.view-deck-steamodded')
+end
 
 Cartomancer.load_config()
 

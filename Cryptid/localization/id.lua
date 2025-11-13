@@ -1222,7 +1222,7 @@ return {
 					"{C:attention}first discard{} of each round",
 				},
 			},
-			j_cry_Megg = {
+			j_cry_megg = {
 				name = "Megg",
 				text = {
 					"Sell this card to create",
@@ -1236,7 +1236,7 @@ return {
 					"{X:mult,C:white}X#1#{} Mult for each member",
 					"in the {C:attention}Cryptid Discord{}",
 					"{C:inactive}(Currently {X:mult,C:white}X#2#{C:inactive} Mult)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_membershipcardtwo = {
@@ -1245,7 +1245,7 @@ return {
 					"{C:chips}+#1#{} Chips for each member",
 					"in the {C:attention}Cryptid Discord{}",
 					"{C:inactive}(Currently {C:chips}+#2#{C:inactive} Chips)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_meteor = {
@@ -2045,6 +2045,14 @@ return {
 					"card in your hand",
 				},
 			},
+			c_cry_meld = {
+				name = "Meld",
+				text = {
+					"Select a {C:attention}Joker{} or",
+					"{C:attention}playing card{} to",
+					"become {C:dark_edition}Double-Sided",
+				},
+			},
 			c_cry_vacuum = {
 				name = "Vacuum",
 				text = {
@@ -2477,14 +2485,7 @@ return {
 					"into an {C:attention}Echo Card",
 				},
 			},
-			c_cry_meld = {
-				name = "Meld",
-				text = {
-					"Select a {C:attention}Joker{} or",
-					"{C:attention}playing card{} to",
-					"become {C:dark_edition}Double-Sided",
-				},
-			},
+
 			c_cry_theblessing = {
 				name = "The Blessing",
 				text = {
@@ -2716,6 +2717,15 @@ return {
 			},
 		},
 		Other = {
+			alt_wheel_of_fortune = {
+				name = "The Wheel of Fortune",
+				text = {
+					"{C:green}#1# dalam #2#{} peluang untuk menambah",
+					"edisi {C:dark_edition}Foil{}, {C:dark_edition}Holographic{}, dan",
+					"{C:dark_edition}Polychrome{}",
+					"menghancurkan sebuah {C:attention}Joker secara acak",
+				},
+			},
 			banana = {
 				name = "Banana",
 				text = {
@@ -3041,6 +3051,7 @@ return {
 			cry_debuff_obsidian_orb = "Applies abilities of all defeated bosses",
 
 			k_code = "Code",
+			k_chips = "chip",
 			b_code_cards = "Code Cards",
 			b_pull = "PULL",
 			cry_hooked_ex = "Hooked!",

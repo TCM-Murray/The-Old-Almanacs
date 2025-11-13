@@ -116,10 +116,6 @@ local rush_hour_ii = {
 			{ id = "j_diet_cola" },
 			{ id = "v_directors_cut" },
 			{ id = "v_retcon" },
-			{ id = "j_cry_pickle" },
-			{ id = "v_cry_copies" },
-			{ id = "v_cry_tag_printer" },
-			{ id = "v_cry_clone_machine" },
 		},
 		banned_other = {},
 	},
@@ -133,7 +129,7 @@ local rush_hour_iii = {
 		custom = {
 			{ id = "cry_rush_hour" },
 			{ id = "cry_rush_hour_ii" },
-			{ id = "cry_rush_hour_iii" },
+			{ id = "cry_rush_hour_iii", value = 2 },
 			{ id = "cry_no_tags" },
 		},
 		modifiers = {},
@@ -210,10 +206,6 @@ local rush_hour_iii = {
 			{ id = "j_diet_cola" },
 			{ id = "v_directors_cut" },
 			{ id = "v_retcon" },
-			{ id = "j_cry_pickle" },
-			{ id = "v_cry_copies" },
-			{ id = "v_cry_tag_printer" },
-			{ id = "v_cry_clone_machine" },
 		},
 		banned_other = {},
 	},
@@ -494,6 +486,17 @@ function Game:start_run(args)
 	if G.GAME.modifiers.cry_no_consumables then
 		G.GAME.joker_rate = 1e300
 	end
+	for i, v in pairs(G.handlist) do
+		if v == "cry_Declare0" then
+			d0 = true
+		end
+	end
+	if not d0 then
+		table.insert(G.handlist, 1, "cry_Declare0")
+		table.insert(G.handlist, 1, "cry_Declare1")
+		table.insert(G.handlist, 1, "cry_Declare2")
+	end
+	Cryptid.base_values = {}
 end
 local challenges = {
 	sticker_sheet,

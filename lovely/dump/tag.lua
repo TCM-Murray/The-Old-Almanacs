@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '9f20158954cc9d0a6b47e5a8074f8dfdbb09f5e20e4a215c32ec73a2ad305e3d'
+LOVELY_INTEGRITY = 'f86c0644f817b2ec4f4226c270c187878fafd5cd75868f2f4202527b4deb4e08'
 
 --Class
 Tag = Object:extend()
@@ -127,6 +127,8 @@ end
 
 function Tag:apply_to_run(_context)
     if self.triggered then return end
+    local flags = SMODS.calculate_context({prevent_tag_trigger = self, other_context = _context})
+    if flags.prevent_trigger then return end
     local obj = SMODS.Tags[self.key]
     local res
     if obj and obj.apply and type(obj.apply) == 'function' then
@@ -336,7 +338,7 @@ function Tag:apply_to_run(_context)
                     local card = Card(G.shop_vouchers.T.x + G.shop_vouchers.T.w/2,
                     G.shop_vouchers.T.y, G.CARD_W, G.CARD_H, G.P_CARDS.empty, G.P_CENTERS[voucher_key],{bypass_discovery_center = true, bypass_discovery_ui = true})
                     card.from_tag = true
-                    Cryptid.misprintize(card)
+                    Cryptid.manipulate(card)
                     if G.GAME.events.ev_cry_choco2 then
                         card.misprint_cost_fac = (card.misprint_cost_fac or 1) * 2
                         card:set_cost()
@@ -523,6 +525,7 @@ function Tag:load(tag_savetable)
     self.tally = tag_savetable.tally
     self.ability = tag_savetable.ability
     G.GAME.tag_tally = math.max(self.tally, G.GAME.tag_tally) + 1
+    self.from_load = true
 end
 
 function Tag:juice_up(_scale, _rot)
@@ -534,9 +537,11 @@ function Tag:generate_UI(_size)
 
     local tag_sprite_tab = nil
 
-    local tagatlas = G.ASSET_ATLAS[(not self.hide_ability) and G.P_TAGS[self.key].atlas or "tags"]
+    local tagatlas = G.ASSET_ATLAS[self and (not self.hide_ability) and G.P_TAGS[self.key] and G.P_TAGS[self.key].atlas or "tags"]
     if self.ability.shiny and not self.hide_ability then
-    	if not G.P_TAGS[self.key].atlas then
+    	if G.P_TAGS[self.key].shiny_atlas then
+    		tagatlas = G.ASSET_ATLAS[G.P_TAGS[self.key].shiny_atlas]
+    	elseif not G.P_TAGS[self.key].atlas then
     		tagatlas = G.ASSET_ATLAS['cry_shinyv']
     	elseif G.P_TAGS[self.key].atlas == 'cry_tag_cry' then
     		tagatlas = G.ASSET_ATLAS['cry_shinyc']
@@ -621,6 +626,17 @@ function Tag:generate_UI(_size)
     	add_to_drawhash(_self)
     end
     tag_sprite.click = function(_self)
+    		if G.GAME.USING_POINTER then
+    			local t = G.P_TAGS[self.key]
+    			if not t.no_doe and not t.hidden and not t.no_pointer then
+    				add_tag(self)
+    				G.FUNCS.exit_overlay_menu_code()
+    				if G.GAME.CODE_DESTROY_CARD then
+    					G.GAME.CODE_DESTROY_CARD:start_dissolve()
+    					G.GAME.CODE_DESTROY_CARD = nil
+    				end
+    			end
+    		end
             if self.key == 'tag_cry_cat' and self.HUD_tag then
     		for i = 1, #G.GAME.tags do
     			local other_cat = G.GAME.tags[i]

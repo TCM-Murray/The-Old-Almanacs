@@ -129,18 +129,24 @@ local test3 = {
 		},
 	},
 	calculate = function(self, card, context)
-		if context.end_of_round and not context.individual and not context.repetition then
-			Cryptid.suit_level_up(context.blueprint_card or card, nil, 1, {
-				"High Card",
-				"Pair",
-				"Two Pair",
-				"Three of a Kind",
-				"Straight",
-				"Flush",
-				"Full House",
-				"Four of a Kind",
-				"Straight Flush",
-			}, true)
+		if context.using_consumeable then
+			if context.consumeable.ability.set == "Tarot" then
+				Cryptid.suit_level_up(
+					context.blueprint_card or card,
+					nil,
+					1,
+					Cryptid.table_merge({ "Three of a Kind" }, { "Three of a Kind" }, { "Full House" }, { "Pair" }),
+					true
+				)
+			else
+				Cryptid.suit_level_up(
+					context.blueprint_card or card,
+					nil,
+					1,
+					Cryptid.table_merge({ "Three of a Kind" }, { "Full House" }, { "Pair" }, { "Three of a Kind" }),
+					true
+				)
+			end
 		elseif context.pre_discard and not context.hook then
 			local text, loc_disp_text, poker_hands, scoring_hand, disp_text =
 				G.FUNCS.get_poker_hand_info(G.hand.highlighted)
@@ -223,84 +229,4 @@ local test4 = {
 		end
 	end,
 }
-local kidnap2 = {
-	object_type = "Joker",
-	name = "cry-kidnap2",
-	key = "kidnap2",
-	pos = { x = 1, y = 2 },
-	config = {
-		extra = 1,
-	},
-	rarity = 1,
-	cost = 4,
-	loc_txt = {
-		name = "asd",
-		text = {
-			"Earn {C:money}$#1#{} at end of round",
-			"per unique {C:attention}Type Mult{} or",
-			"{C:attention}Type Chips{} Joker sold this run",
-			"{C:inactive}(Currently {C:money}$#2#{C:inactive})",
-		},
-	},
-	blueprint_compat = false,
-	loc_vars = function(self, info_queue, center)
-		local value = 0
-		if G.GAME and G.GAME.jokers_sold then
-			for _, v in ipairs(G.GAME.jokers_sold) do
-				if
-					G.P_CENTERS[v].effect == "Type Mult"
-					or G.P_CENTERS[v].effect == "Cry Type Mult"
-					or G.P_CENTERS[v].effect == "Cry Type Chips"
-					or G.P_CENTERS[v].effect == "Boost Kidnapping"
-					or (
-						G.P_CENTERS[v].name == "Sly Joker"
-						or G.P_CENTERS[v].name == "Wily Joker"
-						or G.P_CENTERS[v].name == "Clever Joker"
-						or G.P_CENTERS[v].name == "Devious Joker"
-						or G.P_CENTERS[v].name == "Crafty Joker"
-					)
-				then
-					value = value + 1
-				end
-			end
-		end
-		return { vars = { center.ability.extra, center.ability.extra * value } }
-	end,
-	atlas = "atlasone",
-	calc_dollar_bonus = function(self, card)
-		local value = 0
-		for _, v in ipairs(G.GAME.jokers_sold) do
-			if
-				G.P_CENTERS[v].effect == "Type Mult"
-				or G.P_CENTERS[v].effect == "Cry Type Mult"
-				or G.P_CENTERS[v].effect == "Cry Type Chips"
-				or G.P_CENTERS[v].effect == "Boost Kidnapping"
-				or (
-					G.P_CENTERS[v].name == "Sly Joker"
-					or G.P_CENTERS[v].name == "Wily Joker"
-					or G.P_CENTERS[v].name == "Clever Joker"
-					or G.P_CENTERS[v].name == "Devious Joker"
-					or G.P_CENTERS[v].name == "Crafty Joker"
-				)
-			then
-				value = value + 1
-			end
-		end
-		if value == 0 then
-			return
-		end
-		return card.ability.extra * value
-	end,
-	cry_credits = {
-		idea = {
-			"Jevonn",
-		},
-		art = {
-			"Jevonn",
-		},
-		code = {
-			"Jevonn",
-		},
-	},
-}
-return { items = { test, test2, test3, test4, kidnap2 }, disabled = true }
+return { items = { test, test2, test3, test4 }, disabled = true }

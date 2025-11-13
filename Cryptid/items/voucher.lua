@@ -242,15 +242,12 @@ local stickyhand = { -- CSL T1; +1 card selection limit
 		return { vars = { (card and card.ability.extra or self.config.extra) } }
 	end,
 	redeem = function(self, card)
-		G.hand.config.highlighted_limit = G.hand.config.highlighted_limit
-			+ (card and card.ability.extra or self.config.extra)
+		SMODS.change_play_limit(card.ability.extra or self.config.extra)
+		SMODS.change_discard_limit(card.ability.extra or self.config.extra)
 	end,
 	unredeem = function(self, card)
-		G.hand.config.highlighted_limit = G.hand.config.highlighted_limit
-			- (card and card.ability.extra or self.config.extra)
-		if G.hand.config.highlighted_limit < 5 then
-			G.hand.config.highlighted_limit = 5
-		end
+		SMODS.change_play_limit(-(card.ability.extra or self.config.extra))
+		SMODS.change_discard_limit(-(card.ability.extra or self.config.extra))
 		if not G.GAME.before_play_buffer then
 			G.hand:unhighlight_all()
 		end
@@ -285,15 +282,12 @@ local grapplinghook = { -- CSL T2; +2 card selection limit
 		return { vars = { (card and card.ability.extra or self.config.extra) } }
 	end,
 	redeem = function(self, card)
-		G.hand.config.highlighted_limit = G.hand.config.highlighted_limit
-			+ (card and card.ability.extra or self.config.extra)
+		SMODS.change_play_limit(card.ability.extra or self.config.extra)
+		SMODS.change_discard_limit(card.ability.extra or self.config.extra)
 	end,
 	unredeem = function(self, card)
-		G.hand.config.highlighted_limit = G.hand.config.highlighted_limit
-			- (card and card.ability.extra or self.config.extra)
-		if G.hand.config.highlighted_limit < 5 then
-			G.hand.config.highlighted_limit = 5
-		end
+		SMODS.change_play_limit(-(card.ability.extra or self.config.extra))
+		SMODS.change_discard_limit(-(card.ability.extra or self.config.extra))
 		if not G.GAME.before_play_buffer then
 			G.hand:unhighlight_all()
 		end
@@ -371,6 +365,32 @@ local satellite_uplink = { -- Code T2; Code cards may appear in any of the Celes
 	end,
 	requires = { "v_cry_command_prompt" },
 }
+
+--i removed the patch as it didnt do anything and its not needed
+--mainly just took from vanillaremade
+SMODS.Booster:take_ownership_by_kind("Celestial", {
+	create_card = function(self, card, i)
+		local _card
+		if G.GAME.used_vouchers.v_cry_satellite_uplink and pseudorandom("satellite_uplink") > 0.8 then
+			_card = {
+				set = "Code",
+				area = G.pack_cards,
+				skip_materialize = true,
+				soulable = true,
+				key_append = "pl2",
+			}
+		else
+			_card = {
+				set = "Planet",
+				area = G.pack_cards,
+				skip_materialize = true,
+				soulable = true,
+				key_append = "pl1",
+			}
+		end
+		return _card
+	end,
+}, true)
 
 -- Tier 3 Vouchers
 local overstock_multi = { -- Overstock T3; +1 card slot, +1 booster pack slot and +1 voucher slot available in the shop
@@ -1100,6 +1120,7 @@ local double_down = { -- DSide T3; After every round, X1.5 to all values on the 
 		},
 		code = {
 			"Math",
+			"lord-ruby",
 		},
 		jolly = {
 			"Jolly Open Winner",
@@ -1138,15 +1159,12 @@ local hyperspacetether = { -- CSL T3; +2 card selection limit, all* selected car
 		return { vars = { (card and card.ability.extra or self.config.extra) } }
 	end,
 	redeem = function(self, card)
-		G.hand.config.highlighted_limit = G.hand.config.highlighted_limit
-			+ (card and card.ability.extra or self.config.extra)
+		SMODS.change_play_limit(card.ability.extra or self.config.extra)
+		SMODS.change_discard_limit(card.ability.extra or self.config.extra)
 	end,
 	unredeem = function(self, card)
-		G.hand.config.highlighted_limit = G.hand.config.highlighted_limit
-			- (card and card.ability.extra or self.config.extra)
-		if G.hand.config.highlighted_limit < 5 then
-			G.hand.config.highlighted_limit = 5
-		end
+		SMODS.change_play_limit(-(card.ability.extra or self.config.extra))
+		SMODS.change_discard_limit(-(card.ability.extra or self.config.extra))
 		if not G.GAME.before_play_buffer then
 			G.hand:unhighlight_all()
 		end

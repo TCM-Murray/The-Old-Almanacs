@@ -14,23 +14,6 @@ SMODS.DrawStep({
 						self.params.viewed_back
 					) == "table" and self.params.viewed_back or (self.params.viewed_back and G.GAME.viewed_back or G.GAME.selected_back))
 				or Back(G.P_CENTERS["b_red"])
-			if currentBack.effect.config.cry_force_edition and not currentBack.effect.config.cry_antimatter then
-				if currentBack.effect.config.cry_force_edition_shader then
-					self.children.back:draw_shader(
-						currentBack.effect.config.cry_force_edition_shader,
-						nil,
-						self.ARGS.send_to_shader,
-						true
-					)
-				else
-					self.children.back:draw_shader(
-						currentBack.effect.config.cry_force_edition,
-						nil,
-						self.ARGS.send_to_shader,
-						true
-					)
-				end
-			end
 			if
 				currentBack.effect.config.cry_force_seal
 				and not currentBack.effect.config.hide_seal
@@ -200,33 +183,66 @@ SMODS.DrawStep({
 		then
 			local scale_mod = 0.07 -- + 0.02*math.cos(1.8*G.TIMERS.REAL) + 0.00*math.cos((G.TIMERS.REAL - math.floor(G.TIMERS.REAL))*math.pi*14)*(1 - (G.TIMERS.REAL - math.floor(G.TIMERS.REAL)))^3
 			local rotate_mod = 0 --0.05*math.cos(1.219*G.TIMERS.REAL) + 0.00*math.cos((G.TIMERS.REAL)*math.pi*5)*(1 - (G.TIMERS.REAL - math.floor(G.TIMERS.REAL)))^2
-			self.children.floating_sprite2:draw_shader(
-				"dissolve",
-				0,
-				nil,
-				nil,
-				self.children.center,
-				scale_mod,
-				rotate_mod,
-				nil,
-				0.1 --[[ + 0.03*math.cos(1.8*G.TIMERS.REAL)--]],
-				nil,
-				0.6
-			)
-			self.children.floating_sprite2:draw_shader(
-				"dissolve",
-				nil,
-				nil,
-				nil,
-				self.children.center,
-				scale_mod,
-				rotate_mod
-			)
+			if self.children.floating_sprite2 then
+				self.children.floating_sprite2:draw_shader(
+					"dissolve",
+					0,
+					nil,
+					nil,
+					self.children.center,
+					scale_mod,
+					rotate_mod,
+					nil,
+					0.1 --[[ + 0.03*math.cos(1.8*G.TIMERS.REAL)--]],
+					nil,
+					0.6
+				)
+				self.children.floating_sprite2:draw_shader(
+					"dissolve",
+					nil,
+					nil,
+					nil,
+					self.children.center,
+					scale_mod,
+					rotate_mod
+				)
+			else
+				local center = self.config.center
+				if _center and _center.soul_pos and _center.soul_pos.extra then
+					self.children.floating_sprite2 = Sprite(
+						self.T.x,
+						self.T.y,
+						self.T.w,
+						self.T.h,
+						G.ASSET_ATLAS[_center.atlas or _center.set],
+						_center.soul_pos.extra
+					)
+					self.children.floating_sprite2.role.draw_major = self
+					self.children.floating_sprite2.states.hover.can = false
+					self.children.floating_sprite2.states.click.can = false
+				end
+			end
 		end
 	end,
 	conditions = { vortex = false, facing = "front" },
 })
 SMODS.draw_ignore_keys.floating_sprite2 = true
+
+-- CCD Drawstep
+local interceptorSprite = nil
+SMODS.DrawStep({
+	key = "ccd_interceptor",
+	order = -5,
+	func = function(self)
+		local card_type = self.ability.set or "None"
+		if card_type ~= "Default" and card_type ~= "Enhanced" and self.playing_card and self.facing == "front" then
+			interceptorSprite = interceptorSprite
+				or Sprite(0, 0, G.CARD_W, G.CARD_H, G.ASSET_ATLAS["cry_misc"], { x = 3, y = 1 })
+			interceptorSprite.role.draw_major = self
+			interceptorSprite:draw_shader("dissolve", nil, nil, nil, self.children.center)
+		end
+	end,
+})
 
 -- Make hover UI collidable - so we can detect collision and display tooltips
 local m = Card.move
@@ -278,7 +294,7 @@ end
 -- Unfortunately this doesn't play nicely with gameset UI
 local cainit = CardArea.init
 function CardArea:init(X, Y, W, H, config)
-	if config.collection then
+	if config and config.collection then
 		config.highlight_limit = config.card_limit
 	end
 	return cainit(self, X, Y, W, H, config)
@@ -305,80 +321,6 @@ end
 local G_UIDEF_use_and_sell_buttons_ref = G.UIDEF.use_and_sell_buttons
 function G.UIDEF.use_and_sell_buttons(card)
 	local abc = G_UIDEF_use_and_sell_buttons_ref(card)
-	-- Allow code cards to be reserved
-	if (card.area == G.pack_cards and G.pack_cards) and card.ability.consumeable then --Add a use button
-		if card.ability.set == "Code" then
-			return {
-				n = G.UIT.ROOT,
-				config = { padding = -0.1, colour = G.C.CLEAR },
-				nodes = {
-					{
-						n = G.UIT.R,
-						config = {
-							ref_table = card,
-							r = 0.08,
-							padding = 0.1,
-							align = "bm",
-							minw = 0.5 * card.T.w - 0.15,
-							minh = 0.7 * card.T.h,
-							maxw = 0.7 * card.T.w - 0.15,
-							hover = true,
-							shadow = true,
-							colour = G.C.UI.BACKGROUND_INACTIVE,
-							one_press = true,
-							button = "use_card",
-							func = "can_reserve_card",
-						},
-						nodes = {
-							{
-								n = G.UIT.T,
-								config = {
-									text = localize("b_pull"),
-									colour = G.C.UI.TEXT_LIGHT,
-									scale = 0.55,
-									shadow = true,
-								},
-							},
-						},
-					},
-					{
-						n = G.UIT.R,
-						config = {
-							ref_table = card,
-							r = 0.08,
-							padding = 0.1,
-							align = "bm",
-							minw = 0.5 * card.T.w - 0.15,
-							maxw = 0.9 * card.T.w - 0.15,
-							minh = 0.1 * card.T.h,
-							hover = true,
-							shadow = true,
-							colour = G.C.UI.BACKGROUND_INACTIVE,
-							one_press = true,
-							button = "Do you know that this parameter does nothing?",
-							func = "can_use_consumeable",
-						},
-						nodes = {
-							{
-								n = G.UIT.T,
-								config = {
-									text = localize("b_use"),
-									colour = G.C.UI.TEXT_LIGHT,
-									scale = 0.45,
-									shadow = true,
-								},
-							},
-						},
-					},
-					{ n = G.UIT.R, config = { align = "bm", w = 7.7 * card.T.w } },
-					{ n = G.UIT.R, config = { align = "bm", w = 7.7 * card.T.w } },
-					{ n = G.UIT.R, config = { align = "bm", w = 7.7 * card.T.w } },
-					{ n = G.UIT.R, config = { align = "bm", w = 7.7 * card.T.w } },
-					-- Betmma can't explain it, neither can I
-				},
-			}
-		end
-	end
 	-- Remove sell button from cursed jokers
 	if
 		card.area
@@ -393,12 +335,13 @@ function G.UIDEF.use_and_sell_buttons(card)
 	if card.config and card.config.center and card.config.center.key == "c_cry_potion" then
 		table.remove(abc.nodes[1].nodes, 1)
 	end
+	-- i love buttercup
 	if
 		card.area
-		and card.edition
-		and (card.area == G.jokers or card.area == G.consumeables or card.area == G.hand)
-		and card.edition.cry_double_sided
-		and not Card.no(card, "dbl")
+		and card.area.config.type == "joker"
+		and card.config
+		and card.config.center
+		and card.ability.name == "cry-Buttercup"
 	then
 		local use = {
 			n = G.UIT.C,
@@ -411,20 +354,20 @@ function G.UIDEF.use_and_sell_buttons(card)
 						align = "cr",
 						maxw = 1.25,
 						padding = 0.1,
-						r = 0.08,
+						r = 0.05,
 						hover = true,
 						shadow = true,
 						colour = G.C.UI.BACKGROUND_INACTIVE,
 						one_press = true,
-						button = "flip",
-						func = "can_flip_card",
+						button = "store",
+						func = "can_store_card",
 					},
 					nodes = {
 						{ n = G.UIT.B, config = { w = 0.1, h = 0.3 } },
 						{
 							n = G.UIT.T,
 							config = {
-								text = localize("b_flip"),
+								text = localize("b_store"),
 								colour = G.C.UI.TEXT_LIGHT,
 								scale = 0.3,
 								shadow = true,
@@ -446,64 +389,6 @@ function G.UIDEF.use_and_sell_buttons(card)
 			use,
 		} })
 		return abc
-	end
-	if
-		card.area
-		and (card.area == G.jokers or card.area == G.consumeables or card.area == G.hand)
-		and (not card.edition or not card.edition.cry_double_sided)
-		and not card.ability.eternal
-		and not Card.no(card, "dbl")
-	then
-		for i = 1, #card.area.cards do
-			if card.area.cards[i].edition and card.area.cards[i].edition.cry_double_sided then
-				local use = {
-					n = G.UIT.C,
-					config = { align = "cr" },
-					nodes = {
-						{
-							n = G.UIT.C,
-							config = {
-								ref_table = card,
-								align = "cr",
-								maxw = 1.25,
-								padding = 0.1,
-								r = 0.08,
-								hover = true,
-								shadow = true,
-								colour = G.C.UI.BACKGROUND_INACTIVE,
-								one_press = true,
-								button = "flip_merge",
-								func = "can_flip_merge_card",
-							},
-							nodes = {
-								{ n = G.UIT.B, config = { w = 0.1, h = 0.3 } },
-								{
-									n = G.UIT.T,
-									config = {
-										text = localize("b_merge"),
-										colour = G.C.UI.TEXT_LIGHT,
-										scale = 0.3,
-										shadow = true,
-									},
-								},
-							},
-						},
-					},
-				}
-				local m = abc.nodes[1]
-				if not card.added_to_deck then
-					use.nodes[1].nodes = { use.nodes[1].nodes[2] }
-					if card.ability.consumeable then
-						m = abc
-					end
-				end
-				m.nodes = m.nodes or {}
-				table.insert(m.nodes, { n = G.UIT.R, config = { align = "cl" }, nodes = {
-					use,
-				} })
-				return abc
-			end
-		end
 	end
 	return abc
 end

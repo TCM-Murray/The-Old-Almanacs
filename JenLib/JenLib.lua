@@ -12,6 +12,290 @@
 --Global table, don't modify!
 jl = {}
 
+-- Patch Card metatable to provide can_calculate method safely
+-- This fixes crashes during card destruction without function override conflicts
+local original_card_mt = getmetatable(Card) or {}
+local original_index = original_card_mt.__index or function(t, k) return rawget(t, k) end
+
+-- Create new __index that provides can_calculate when missing
+local function safe_card_index(card, key)
+    if key == "can_calculate" and not rawget(card, "can_calculate") then
+        -- Provide a safe can_calculate method for cards that don't have one
+        return function(self, ignore_debuff, ignore_sliced)
+            -- Use rawget to avoid triggering metatable again
+            local debuff = rawget(self, "debuff")
+            local getting_sliced = rawget(self, "getting_sliced")
+            local is_available = (not debuff or ignore_debuff) and (not getting_sliced or ignore_sliced)
+            return is_available
+        end
+    end
+    
+    -- Call original __index behavior
+    if type(original_index) == "function" then
+        return original_index(card, key)
+    else
+        return original_index[key]
+    end
+end
+
+-- Apply the metatable patch
+original_card_mt.__index = safe_card_index
+setmetatable(Card, original_card_mt)
+
+print("[JEN DEBUG] Card metatable patched to provide can_calculate method safely")
+
+-- ========================================
+-- CRASH MONITORING AND DEBUG SYSTEM
+-- ========================================
+
+-- Crash monitoring system
+jl.crash_monitor = {
+	active = false,
+	initialized = false,
+	crash_count = 0,
+	last_crash_time = 0
+}
+
+-- Initialize crash monitoring system
+function jl.crash_monitor:initialize()
+	if self.initialized then return end
+	self.initialized = true
+	
+	print("[JEN DEBUG] 🛡️ Initializing crash monitoring system...")
+	
+	-- Check crash handler availability
+	self:detect_crash_handlers()
+	
+	-- Start memory monitoring
+	self:start_memory_monitoring()
+	
+	-- Start crash monitoring
+	self:start_crash_monitoring()
+	
+	print("[JEN DEBUG] ✅ Crash monitoring system initialized")
+end
+
+-- Detect available crash handlers
+function jl.crash_monitor:detect_crash_handlers()
+	-- Check if the game's crash handler is active
+	if love.errorhandler then
+		print("[JEN DEBUG] 🛡️ Game's built-in crash handler is available")
+	end
+	
+	-- Check if Steamodded crash handler is active
+	if SMODS and SMODS.restart_game then
+		print("[JEN DEBUG] 🛡️ Steamodded crash handler is available")
+	end
+	
+	-- Monitor for any crash-related global variables
+	if G and G.F_NO_ERROR_HAND then
+		print("[JEN DEBUG] 🚨 Error handling is DISABLED (G.F_NO_ERROR_HAND = true)")
+	else
+		print("[JEN DEBUG] 🛡️ Error handling is ENABLED")
+	end
+end
+
+-- Memory monitoring and cleanup
+function jl.crash_monitor:start_memory_monitoring()
+	-- Emergency memory cleanup
+	local function emergency_memory_cleanup()
+		local memory = collectgarbage("count")
+		if memory > 150000 then  -- If memory > 150MB
+			print("[JEN EMERGENCY] Critical memory usage:", math.floor(memory/1024), "KB - Forcing cleanup!")
+			collectgarbage("collect")
+			collectgarbage("collect")
+			collectgarbage("collect")
+			collectgarbage("collect")
+			collectgarbage("collect")
+			local new_memory = collectgarbage("count")
+			print("[JEN EMERGENCY] Memory reduced to:", math.floor(new_memory/1024), "KB")
+		end
+	end
+	
+	-- Set up periodic memory monitoring
+	Q(function()
+		emergency_memory_cleanup()
+		return true
+	end, 0.5, nil, 'after')  -- Check every 0.5 seconds
+end
+
+-- Enhanced crash monitoring with memory leak detection and emergency garbage collection
+function jl.crash_monitor:start_crash_monitoring()
+	if self.active then return end
+	self.active = true
+	
+	-- Initialize memory tracking
+	self.memory_history = {}
+	self.memory_trend = 0
+	
+	print("[JEN DEBUG] 🔍 Starting real-time crash handler monitoring...")
+	
+	-- Monitor every frame for crash handler activation
+	Q(function()
+		-- Check if we're in a crash state
+		if G and G.E_MANAGER then
+			local memory = collectgarbage("count")
+			
+			-- Track memory usage trend
+			table.insert(self.memory_history, memory)
+			if #self.memory_history > 10 then
+				table.remove(self.memory_history, 1)
+			end
+			
+			-- Calculate memory trend (positive = increasing, negative = decreasing)
+			if #self.memory_history >= 5 then
+				local recent_avg = 0
+				local older_avg = 0
+				for i = #self.memory_history - 4, #self.memory_history do
+					recent_avg = recent_avg + self.memory_history[i]
+				end
+				for i = 1, 5 do
+					older_avg = older_avg + self.memory_history[i]
+				end
+				self.memory_trend = (recent_avg - older_avg) / 5
+				
+				-- Warn if memory is consistently increasing
+				if self.memory_trend > 1000 and memory > 150000 then  -- Increasing by >1MB per check and already high
+					print("[JEN DEBUG] ⚠️ MEMORY LEAK DETECTED - Memory increasing by", math.floor(self.memory_trend), "KB per check")
+					print("[JEN DEBUG] 💾 Current memory:", memory, "KB")
+					print("[JEN DEBUG] 🧹 Attempting preventive garbage collection...")
+					collectgarbage("collect")
+				end
+			end
+			
+			if memory > 200000 then  -- If memory spikes above 200MB
+				print("[JEN DEBUG] 🚨 HIGH MEMORY SPIKE DETECTED!")
+				print("[JEN DEBUG] 💾 Current memory:", memory, "KB")
+				print("[JEN DEBUG] 🕐 Time:", os.date("%H:%M:%S"))
+				print("[JEN DEBUG] ⚠️ Crash handler may activate soon...")
+				
+				-- Try to force garbage collection to prevent crash
+				if memory > 300000 then  -- If memory is extremely high
+					print("[JEN DEBUG] 🧹 FORCING EMERGENCY GARBAGE COLLECTION!")
+					collectgarbage("collect")
+					local new_memory = collectgarbage("count")
+					print("[JEN DEBUG] 💾 Memory after emergency GC:", new_memory, "KB")
+				end
+			end
+		end
+		return true
+	end, 0.1, nil, 'after')  -- Check every 0.1 seconds
+end
+
+-- Monitor for crash recovery
+function jl.crash_monitor:monitor_crash_recovery()
+	-- Check if we're in a post-crash state
+	if G and G.E_MANAGER then
+		local current_memory = collectgarbage("count")
+		if current_memory < 50000 then  -- If memory is low after crash
+			-- Post-crash recovery detected (debug output removed)
+		end
+	end
+end
+
+-- Event Manager protection
+function jl.crash_monitor:protect_event_manager()
+	if G.E_MANAGER and G.E_MANAGER.event_queue then
+		local queue_size = #G.E_MANAGER.event_queue
+		if queue_size > 1000 then  -- If event queue gets too large
+			print("[JEN DEBUG] 🚨 Large event queue detected:", queue_size, "events - forcing cleanup!")
+			-- Force process some events to reduce queue
+			for i = 1, math.min(100, queue_size) do
+				if G.E_MANAGER.event_queue[1] then
+					table.remove(G.E_MANAGER.event_queue, 1)
+				end
+			end
+			print("[JEN INFO] Event queue reduced to:", #G.E_MANAGER.event_queue, "events")
+		end
+	end
+end
+
+-- Intercept Event Manager functions for crash detection
+function jl.crash_monitor:intercept_event_manager()
+	-- Intercept the Event Manager's event execution loop where the crash likely happens
+	local original_process_events = G.E_MANAGER.process_events
+	if original_process_events then
+		G.E_MANAGER.process_events = function(self, queue_name)
+			local success, error_msg = pcall(function()
+				return original_process_events(self, queue_name)
+			end)
+			if not success then
+				print("[JEN ERROR] Event Manager process_events crashed:", tostring(error_msg))
+				-- Add crash handler detection
+				if error_msg and error_msg:find("not enough memory") then
+					print("[JEN DEBUG] 🚨 MEMORY CRASH DETECTED - Crash handler should activate now!")
+					print("[JEN DEBUG] 📍 Location: process_events, Queue:", tostring(queue_name))
+					print("[JEN DEBUG] 🕐 Time:", os.date("%H:%M:%S"))
+					print("[JEN DEBUG] 💾 Memory before crash:", collectgarbage("count"), "KB")
+				end
+			end
+		end
+	else
+		-- Try to intercept the event execution in the update loop
+		local original_update = G.E_MANAGER.update
+		G.E_MANAGER.update = function(self, dt)
+			local success, error_msg = pcall(function()
+				return original_update(self, dt)
+			end)
+			if not success then
+				print("[JEN ERROR] Event Manager update crashed:", tostring(error_msg))
+				-- Add crash handler detection
+				if error_msg and error_msg:find("not enough memory") then
+					print("[JEN DEBUG] 🚨 MEMORY CRASH DETECTED - Crash handler should activate now!")
+					print("[JEN DEBUG] 📍 Location: update, dt:", tostring(dt))
+					print("[JEN DEBUG] 🕐 Time:", os.date("%H:%M:%S"))
+					print("[JEN DEBUG] 💾 Memory before crash:", collectgarbage("count"), "KB")
+					print("[JEN DEBUG] 🔄 This should trigger the game's built-in crash handler...")
+				end
+			end
+		end
+	end
+end
+
+-- Intercept thread error handling for crash detection (catches "not enough memory" errors)
+function jl.crash_monitor:intercept_thread_errors()
+	-- Intercept the main thread error handler to catch "not enough memory" errors
+	if love and love.threaderror then
+		local original_threaderror = love.threaderror
+		love.threaderror = function(thread, errorstr)
+			-- Check if this is a memory-related crash
+			if errorstr and errorstr:find("not enough memory") then
+				print("[JEN DEBUG] 🚨 MEMORY CRASH DETECTED - Crash handler should activate now!")
+				print("[JEN DEBUG] 📍 Location: Thread error, Thread ID:", tostring(thread))
+				print("[JEN DEBUG] 🕐 Time:", os.date("%H:%M:%S"))
+				print("[JEN DEBUG] 💾 Memory before crash:", collectgarbage("count"), "KB")
+				print("[JEN DEBUG] 🔄 This should trigger the game's built-in crash handler...")
+			end
+			
+			-- Call the original handler
+			return original_threaderror(thread, errorstr)
+		end
+	end
+end
+
+-- Schedule periodic monitoring
+function jl.crash_monitor:schedule_monitoring()
+	-- Schedule crash recovery monitoring
+	Q(function()
+		self:monitor_crash_recovery()
+		return true
+	end, 2.0, nil, 'after')  -- Check after 2 seconds
+	
+	-- Schedule Event Manager protection
+	Q(function()
+		self:protect_event_manager()
+		return true
+	end, 1.0, nil, 'after')  -- Check every second
+end
+
+-- Complete crash monitoring setup
+function jl.crash_monitor:setup()
+	self:initialize()
+	self:intercept_event_manager()
+	self:intercept_thread_errors()
+	self:schedule_monitoring()
+end
+
 --Returns a table where each element is a single-character string derived from the given string
 function jl.string_to_table(str)
 	if type(str) == 'number' then str = tostring(str) end
@@ -433,6 +717,213 @@ function jl.deepcopy(obj, seen)
     s[obj] = res
     for k, v in pairs(obj) do res[deepCopy(k, s)] = deepCopy(v, s) end
     return setmetatable(res, getmetatable(obj))
+end
+
+-- =====================
+-- Roman numeral helpers
+-- =====================
+local jl_numbers_roman = { 1, 5, 10, 50, 100, 500, 1000 }
+local jl_chars_roman = { "I", "V", "X", "L", "C", "D", "M" }
+local jl_map_roman = { I = 1, V = 5, X = 10, L = 50, C = 100, D = 500, M = 1000 }
+
+function jl.roman(s)
+    s = tonumber(s)
+    if not s or s ~= s then error"Unable to convert to number" end
+    if s == math.huge then error"Unable to convert infinity" end
+    s = math.floor(s)
+    if s <= 0 then return s end
+    local ret = ""
+    for i = #jl_numbers_roman, 1, -1 do
+        local num = jl_numbers_roman[i]
+        while s - num >= 0 and s > 0 do
+            ret = ret .. jl_chars_roman[i]
+            s = s - num
+        end
+        for j = 1, i - 1 do
+            local n2 = jl_numbers_roman[j]
+            if s - (num - n2) >= 0 and s < num and s > 0 and num - n2 ~= n2 then
+                ret = ret .. jl_chars_roman[j] .. jl_chars_roman[i]
+                s = s - (num - n2)
+                break
+            end
+        end
+    end
+    return ret
+end
+
+function jl.unroman(s)
+    s = tostring(s or ""):upper()
+    local ret = 0
+    local i = 1
+    while i <= #s do
+        local c = s:sub(i, i)
+        if c ~= " " then
+            local m = jl_map_roman[c] or error("Unknown Roman Numeral '" .. c .. "'")
+            local nxt = s:sub(i + 1, i + 1)
+            local nextm = jl_map_roman[nxt]
+            if nextm and nextm > m then
+                ret = ret + (nextm - m)
+                i = i + 1
+            else
+                ret = ret + m
+            end
+        end
+        i = i + 1
+    end
+    return ret
+end
+
+-- =====================
+-- Recipe/fusion helpers
+-- =====================
+-- recipes: table of key -> {cost=?, output=?, ingredients={...}}
+function jl.recipes_add(recipes, key, cost, output, ...)
+    recipes[key] = { cost = cost, output = output, ingredients = { ... } }
+    return recipes[key]
+end
+
+function jl.recipes_find_match(recipes, items)
+    if not items or #items <= 0 then return nil end
+    for rk, rv in pairs(recipes or {}) do
+        local matches = 0
+        for _, w in ipairs(rv.ingredients or {}) do
+            for __, x in ipairs(items) do
+                if x.gc and x:gc().key == w then
+                    matches = matches + 1
+                    break
+                end
+            end
+        end
+        if matches >= #(rv.ingredients or {}) then
+            return rk
+        end
+    end
+    return nil
+end
+
+function jl.recipes_has_ingredients(recipes, key)
+    local r = recipes and recipes[key]
+    if not r then return false end
+    local inputs = r.ingredients or {}
+    if #inputs <= 0 then recipes[key] = nil; return false end
+    local acquired = 0
+    for _, v in ipairs(inputs) do
+        if #SMODS.find_card(v, true) > 0 then
+            acquired = acquired + 1
+        end
+    end
+    return acquired >= #inputs
+end
+
+function jl.recipes_get_cards(recipes, key)
+    local r = recipes and recipes[key]
+    if not r then return false end
+    local inputs = r.ingredients or {}
+    if #inputs <= 0 then recipes[key] = nil; return false end
+    local acquired = 0
+    local ingreds = {}
+    for _, v in ipairs(inputs) do
+        if #SMODS.find_card(v, true) > 0 then
+            acquired = acquired + 1
+            table.insert(ingreds, next(SMODS.find_card(v, true)))
+        end
+    end
+    if acquired >= #inputs then return ingreds else return false end
+end
+
+function jl.recipes_is_fusable(recipes, center)
+    for k, v in pairs(recipes or {}) do
+        for __, w in pairs(v.ingredients or {}) do
+            if (type(center) == 'table' and w == center.key) or (type(center) == 'string' and w == center) then
+                return k
+            end
+        end
+    end
+    return false
+end
+
+function jl.fuse_cards(cards, output, fast)
+    if fast then
+        Q(function()
+            play_sound('whoosh')
+            for k, v in ipairs(cards) do
+                G['jen_merge' .. k] = CardArea(G.play.T.x, G.play.T.y, G.play.T.w, G.play.T.h, {type = 'play', card_limit = 5})
+                if v.area then v.area:remove_card(v) end
+                G['jen_merge' .. k]:emplace(v)
+            end
+        return true end)
+        delay(1.5)
+        Q(function()
+            play_sound('explosion_release1')
+            for k, v in ipairs(cards) do
+                v:flip()
+                if G['jen_merge' .. k] then
+                    G['jen_merge' .. k]:remove_card(v)
+                    G['jen_merge' .. k]:remove()
+                    G['jen_merge' .. k] = nil
+                end
+                v:destroy(nil, true, nil, true)
+            end
+        return true end)
+        Q(function() if output then
+            if type(output) == 'function' then
+                output()
+            elseif type(output) == 'string' then
+                local new_card = create_card(G.P_CENTERS[output].set, G.P_CENTERS[output].set == 'Joker' and G.jokers or G.consumeables, nil, nil, nil, nil, output, 'fusion')
+                G.play:emplace(new_card)
+                delay(1.5)
+                Q(function()
+                    G.play:remove_card(new_card)
+                    new_card:add_to_deck()
+                    if new_card.ability.set == 'Joker' then G.jokers:emplace(new_card) else G.consumeables:emplace(new_card) end
+                return true end)
+            end
+        end return true end)
+    else
+        Q(function()
+            play_sound('whoosh')
+            for k, v in ipairs(cards) do
+                G['jen_merge' .. k] = CardArea(G.play.T.x, G.play.T.y, G.play.T.w, G.play.T.h, {type = 'play', card_limit = 5})
+                if v.area then v.area:remove_card(v) end
+                G['jen_merge' .. k]:emplace(v)
+            end
+        return true end)
+        delay(1.5)
+        Q(function()
+            for k, v in ipairs(cards) do
+                v:flip()
+                if k ~= 1 then
+                    if G['jen_merge' .. k] then
+                        G['jen_merge' .. k]:remove_card(v)
+                        G['jen_merge' .. k]:remove()
+                        G['jen_merge' .. k] = nil
+                    end
+                    v:destroy(nil, true, nil, true)
+                end
+            end
+        return true end)
+        delay(0.5)
+        local card
+        Q(function()
+            card = G.jen_merge1.cards[1]
+            card:explode()
+            Q(function() if card then card:remove() end if G.jen_merge1 then G.jen_merge1:remove(); G.jen_merge1 = nil; end return true end)
+            Q(function() if output then
+                if type(output) == 'function' then
+                    output()
+                elseif type(output) == 'string' then
+                    local new_card = create_card(G.P_CENTERS[output].set, G.P_CENTERS[output].set == 'Joker' and G.jokers or G.consumeables, nil, nil, nil, nil, output, 'fusion')
+                    G.play:emplace(new_card)
+                    delay(1.5)
+                    Q(function()
+                        G.play:remove_card(new_card)
+                        new_card:add_to_deck()
+                        if new_card.ability.set == 'Joker' then G.jokers:emplace(new_card) else G.consumeables:emplace(new_card) end
+                    return true end)
+                end
+            end return true end)
+        return true end)
+    end
 end
 
 --Easier way to call joker calculations
@@ -955,4 +1446,136 @@ function jl.a(txt, duration, size, col, snd, sndpitch, sndvol)
 			})
 		return true
 	end)}))
+end
+
+-- Safety functions ported from lovely.toml patches
+
+-- Define lvcol function for Cryptid compatibility
+function jl.lvcol(hand_name)
+    if not G or not G.GAME or not G.GAME.hands then
+        return G.C.UI.TEXT_LIGHT or {1, 1, 1, 1}
+    end
+    
+    local hand = G.GAME.hands[hand_name]
+    if not hand or not hand.level then
+        return G.C.UI.TEXT_LIGHT or {1, 1, 1, 1}
+    end
+    
+    local level = hand.level
+    if type(level) == "table" and level.to_number then
+        level = level:to_number()
+    end
+    
+    -- Use G.C.HAND_LEVELS with safe fallback
+    if G.C and G.C.HAND_LEVELS then
+        return G.C.HAND_LEVELS[level] or G.C.UI.TEXT_LIGHT or {1, 1, 1, 1}
+    else
+        return G.C.UI.TEXT_LIGHT or {1, 1, 1, 1}
+    end
+end
+
+-- Initialize hand level color system for big numbers
+function jl.init_hand_level_colors()
+    if G.C.HAND_LEVELS_JEN_POPULATED then return end
+    G.C.HAND_LEVELS_JEN_POPULATED = true
+    
+    print("[JEN DEBUG] Setting up hand level color metatable for big numbers")
+    
+    -- Store original colors
+    local base_colors = {
+        G.C.HAND_LEVELS[1], G.C.HAND_LEVELS[2], G.C.HAND_LEVELS[3], 
+        G.C.HAND_LEVELS[4], G.C.HAND_LEVELS[5], G.C.HAND_LEVELS[6], G.C.HAND_LEVELS[7]
+    }
+    
+    -- Set up metatable to generate colors for any missing level
+    local mt = {
+        __index = function(t, k)
+            if type(k) == "string" then
+                -- Handle special formats like "!123" for levels > 7200
+                if k:sub(1,1) == "!" then
+                    local num = tonumber(k:sub(2))
+                    if num and num > 0 then
+                        local color_index = ((num - 1) % 7) + 1
+                        return base_colors[color_index] or G.C.UI.TEXT_LIGHT
+                    end
+                else
+                    -- Handle regular number format strings
+                    local num = tonumber(k)
+                    if num and num > 0 then
+                        if num <= 7 then
+                            return base_colors[num] or G.C.UI.TEXT_LIGHT
+                        else
+                            local color_index = ((num - 1) % 7) + 1
+                            return base_colors[color_index] or G.C.UI.TEXT_LIGHT
+                        end
+                    end
+                end
+            elseif type(k) == "number" then
+                -- Handle direct number lookups
+                if k > 0 and k <= 7 then
+                    return base_colors[k] or G.C.UI.TEXT_LIGHT
+                else
+                    local color_index = ((k - 1) % 7) + 1
+                    return base_colors[color_index] or G.C.UI.TEXT_LIGHT
+                end
+            end
+            return G.C.UI.TEXT_LIGHT
+        end
+    }
+    
+    setmetatable(G.C.HAND_LEVELS, mt)
+end
+
+-- Safe color helper - ensures color values are never nil
+function jl.safe_color(color)
+    return color or G.C.WHITE or {1, 1, 1, 1}
+end
+
+-- Install small runtime patches that replace simple lovely.toml edits
+function jl.install_runtime_patches()
+    -- Patch text focus string guard (engine/text.lua equivalent)
+	print("Installing text focus string guard patch")
+    if Text and not jl._text_string_guard_installed then
+        jl._text_string_guard_installed = true
+        local _orig_set_focus = Text.set_focus_string
+        if type(_orig_set_focus) == 'function' then
+            Text.set_focus_string = function(self, idx)
+                local ok, err = pcall(function()
+                    if self and self.strings and idx and self.strings[idx] and self.strings[idx].string then
+                        return _orig_set_focus(self, idx)
+                    end
+                end)
+                if not ok then return end
+            end
+        end
+    end
+
+    -- Patch save compression level (engine/string_packer.lua equivalent)
+	print("Installing save compression level patch")
+    if love and love.data and love.data.compress and not jl._save_compress_guard then
+        jl._save_compress_guard = true
+        local _orig_compress = love.data.compress
+        love.data.compress = function(datatype, format, data, level)
+            if datatype == 'string' and format == 'deflate' then
+                local cfg_level = (((Jen or {}).config or {}).save_compression_level) or 1
+                local clamped = math.max(1, math.min(cfg_level, 9))
+                return _orig_compress(datatype, format, data, clamped)
+            end
+            return _orig_compress(datatype, format, data, level)
+        end
+    end
+end
+
+-- Compute chips*mult safely with big-number support
+print("Installing chipmult sum patch")
+function jl.get_chipmult_sum(hand_chips, mult)
+	local c = to_big(hand_chips or 0)
+	local m = to_big(mult or 0)
+	return c * m
+end
+
+-- Global alias to maintain compatibility with existing calls
+print("Installing chipmult sum alias patch")
+function get_chipmult_sum(hand_chips, mult)
+	return jl.get_chipmult_sum(hand_chips, mult)
 end

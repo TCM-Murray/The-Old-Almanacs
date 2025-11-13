@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '0c67682f21c4b8981afc8a83c3201b6d5baf983aa408e6fbd75da5838873baf5'
+LOVELY_INTEGRITY = 'c10af135d6d01e7f8afc62d481a097b3859459189d8a1a23b6d09fbe0a7beabe'
 
 --Moves the tutorial to the next step in queue
 --
@@ -743,8 +743,8 @@ G.FUNCS.change_viewed_back = function(args)
   local deck_pool = SMODS.collection_pool(G.P_CENTER_POOLS.Back)
   G.GAME.viewed_back:change_to(deck_pool[args.to_key])
   if G.sticker_card then G.sticker_card.sticker = get_deck_win_sticker(G.GAME.viewed_back.effect.center) end
-  local max_stake = get_deck_win_stake(G.GAME.viewed_back.effect.center.key) or 0
-  G.viewed_stake = math.min(G.viewed_stake, max_stake + 1)
+  -- local max_stake = get_deck_win_stake(G.GAME.viewed_back.effect.center.key) or 0
+  -- G.viewed_stake = math.min(G.viewed_stake, max_stake + 1)
   G.PROFILES[G.SETTINGS.profile].MEMORY.deck = args.to_val
   for key, val in pairs(G.sticker_card.area.cards) do
   	val.children.back = false
@@ -1938,7 +1938,13 @@ G.FUNCS.hand_mult_UI_set = function(e)
     G.GAME.current_round.current_hand.mult_text = new_mult_text
     e.config.object.scale = scale_number(G.GAME.current_round.current_hand.mult, 0.9, 1000)
     e.config.object:update_text()
-    if not G.TAROT_INTERRUPT_PULSE then G.FUNCS.text_super_juice(e, math.min(2,math.max(0,math.floor(math.log10(is_number(G.GAME.current_round.current_hand.mult) and G.GAME.current_round.current_hand.mult or 1))))) end
+    local num = 0
+    if to_big(is_number(G.GAME.current_round.current_hand.mult) and G.GAME.current_round.current_hand.mult or 1) > to_big(1e300) then 
+    	num = math.min(2,math.max(0,math.floor(math.log10(is_number(G.GAME.current_round.current_hand.mult) and G.GAME.current_round.current_hand.mult or 1))))
+    else
+    	num = 1e300
+    end
+    if not G.TAROT_INTERRUPT_PULSE then G.FUNCS.text_super_juice(e, num) end
   end
 end
 
@@ -1948,7 +1954,13 @@ G.FUNCS.hand_chip_UI_set = function(e)
       G.GAME.current_round.current_hand.chip_text = new_chip_text
       e.config.object.scale = scale_number(G.GAME.current_round.current_hand.chips, 0.9, 1000)
       e.config.object:update_text()
-      if not G.TAROT_INTERRUPT_PULSE then G.FUNCS.text_super_juice(e, math.min(2,math.max(0,math.floor(math.log10(is_number(G.GAME.current_round.current_hand.chips) and G.GAME.current_round.current_hand.chips or 1))))) end
+      local num = 0
+      if to_big(is_number(G.GAME.current_round.current_hand.chips) and G.GAME.current_round.current_hand.chips or 1) > to_big(1e300) then 
+      	num = math.min(2,math.max(0,math.floor(math.log10(is_number(G.GAME.current_round.current_hand.chips) and G.GAME.current_round.current_hand.chips or 1))))
+      else
+      	num = 1e300
+      end
+      if not G.TAROT_INTERRUPT_PULSE then G.FUNCS.text_super_juice(e, num) end
     end
 end
 
@@ -1979,33 +1991,20 @@ function G.FUNCS.text_super_juice(e, _amount)
 end
 
 G.FUNCS.flame_handler = function(e)
-  G.C.UI_CHIPLICK = G.C.UI_CHIPLICK or {1, 1, 1, 1}
-  G.C.UI_MULTLICK = G.C.UI_MULTLICK or {1, 1, 1, 1}
-  for i=1, 3 do
-    G.C.UI_CHIPLICK[i] = math.min(math.max(((G.C.UI_CHIPS[i]*0.5+G.C.YELLOW[i]*0.5) + 0.1)^2, 0.1), 1)
-    G.C.UI_MULTLICK[i] = math.min(math.max(((G.C.UI_MULT[i]*0.5+G.C.YELLOW[i]*0.5) + 0.1)^2, 0.1), 1)
+  G.ARGS.flame_handler = G.ARGS.flame_handler or {}
+  
+  for key, parameter in pairs(SMODS.Scoring_Parameters) do
+      for i=1, 3 do
+          parameter.lick[i] = math.min(math.max(((parameter.colour[i]*0.5+G.C.YELLOW[i]*0.5) + 0.1)^2, 0.1), 1)
+      end
+      G.ARGS.flame_handler[key] = G.ARGS.flame_handler[key] or parameter:flame_handler()
   end
-
-  G.ARGS.flame_handler = G.ARGS.flame_handler or {
-    chips = {
-      id = 'flame_chips', 
-      arg_tab = 'chip_flames',
-      colour = G.C.UI_CHIPS,
-      accent = G.C.UI_CHIPLICK
-    },
-    mult = {
-      id = 'flame_mult', 
-      arg_tab = 'mult_flames',
-      colour = G.C.UI_MULT,
-      accent = G.C.UI_MULTLICK
-    }
-  }
   Cartomancer.init_setting_flames()
   for k, v in pairs(G.ARGS.flame_handler) do
     if e.config.id == v.id then 
       if not e.config.object:is(Sprite) or e.config.object.ID ~= v.ID then 
         e.config.object:remove()
-        e.config.object = Sprite(0, 0, 2.5, 1.25, G.ASSET_ATLAS["ui_1"], {x = 2, y = 0})
+        e.config.object = Sprite(0, 0, e.config._w, e.config._h, G.ASSET_ATLAS["ui_1"], {x = 2, y = 0})
         v.ID = e.config.object.ID
         G.ARGS[v.arg_tab] = {
             intensity = 0,
@@ -2044,7 +2043,7 @@ G.FUNCS.flame_handler = function(e)
         	if _F.intensity > to_big(1e300) then
         		_F.intensity = 1e300
         	else
-        		_F.intensity = _F.intensity:to_number()
+        		_F.intensity = to_number(_F.intensity)
         	end
         end
       else
@@ -2079,7 +2078,7 @@ G.FUNCS.hand_text_UI_set = function(e)
 end
 
   G.FUNCS.can_play = function(e)
-    if #G.hand.highlighted <= (G.GAME.stamp_mod and 1 or 0) or G.GAME.blind.block_play then
+    if #G.hand.highlighted <= 0 or G.GAME.blind.block_play or #G.hand.highlighted > math.max(G.GAME.starting_params.play_limit, 1) then 
         e.config.colour = G.C.UI.BACKGROUND_INACTIVE
         e.config.button = nil
     else
@@ -2123,7 +2122,7 @@ end
   end
 
   G.FUNCS.can_discard = function(e)
-    if G.GAME.current_round.discards_left <= 0 or #G.hand.highlighted <= 0 then 
+    if G.GAME.current_round.discards_left <= 0 or #G.hand.highlighted <= 0 or #G.hand.highlighted > math.max(G.GAME.starting_params.discard_limit, 0) then 
         e.config.colour = G.C.UI.BACKGROUND_INACTIVE
         e.config.button = nil
     else
@@ -2144,7 +2143,7 @@ end
 
   G.FUNCS.can_select_card = function(e)
     local card = e.config.ref_table
-    local card_limit = card.edition and card.edition.card_limit or 0
+    local card_limit = card.ability.card_limit - card.ability.extra_slots_used
     if card.ability.set ~= 'Joker' or #G.jokers.cards < G.jokers.config.card_limit + card_limit then
         e.config.colour = G.C.GREEN
         e.config.button = 'use_card'
@@ -2226,7 +2225,16 @@ end
       G.STATES.PLAY_TAROT
       
     G.CONTROLLER.locks.use = true
-    if G.booster_pack and not G.booster_pack.alignment.offset.py and (card.ability.consumeable or not (G.GAME.pack_choices and G.GAME.pack_choices > 1)) then
+    local nc
+    local select_to = card.area == G.pack_cards and G.pack_cards and booster_obj and SMODS.card_select_area(card, booster_obj) and card:selectable_from_pack(booster_obj)
+    if card.ability.consumeable and not select_to then
+        local obj = card.config.center
+        if obj.keep_on_use and type(obj.keep_on_use) == 'function' then
+            nc = obj:keep_on_use(card)
+        end
+    end
+    if G.booster_pack and not G.booster_pack.alignment.offset.py and ((not select_to and card.ability.consumeable) or not (G.GAME.pack_choices and G.GAME.pack_choices > 1)) then
+    
       G.booster_pack.alignment.offset.py = G.booster_pack.alignment.offset.y
       G.booster_pack.alignment.offset.y = G.ROOM.T.y + 29
     end
@@ -2247,14 +2255,6 @@ end
     if card.children.sell_button then card.children.sell_button:remove(); card.children.sell_button = nil end
     if card.children.price then card.children.price:remove(); card.children.price = nil end
 
-    local nc
-    local select_to = card.area == G.pack_cards and booster_obj and booster_obj.select_card and card:selectable_from_pack(booster_obj)
-    if card.ability.consumeable and not select_to then
-        local obj = card.config.center
-        if obj.keep_on_use and type(obj.keep_on_use) == 'function' then
-            nc = obj:keep_on_use(card)
-        end
-    end
     if not card.from_area then card.from_area = card.area end
     local cry_muse = false
     if card.ability.cry_multiuse and not (card.ability.cry_multiuse <= 1) then
@@ -2619,8 +2619,8 @@ G.FUNCS.check_for_buy_space = function(card)
   if card.ability.set ~= 'Voucher' and
     card.ability.set ~= 'Enhanced' and
     card.ability.set ~= 'Default' and
-        not (card.ability.set == 'Joker' and #G.jokers.cards < G.jokers.config.card_limit + (card.edition and card.edition.card_limit or 0)) and
-        not (card.ability.consumeable and #G.consumeables.cards < G.consumeables.config.card_limit + (card.edition and card.edition.card_limit or 0)) then
+        not (card.ability.set == 'Joker' and #G.jokers.cards < G.jokers.config.card_limit + card.ability.card_limit - card.ability.extra_slots_used) and
+        not (card.ability.consumeable and #G.consumeables.cards < G.consumeables.config.card_limit + card.ability.card_limit - card.ability.extra_slots_used) then
       alert_no_space(card, card.ability.consumeable and G.consumeables or G.jokers)
     return false
   end
@@ -2662,7 +2662,7 @@ G.FUNCS.buy_from_shop = function(e)
               G.jokers:emplace(c1)
             end
             G.E_MANAGER:add_event(Event({func = function()
-                local eval, post = eval_card(c1, {buying_card = true, card = c1})
+                local eval, post = eval_card(c1, {buying_card = true, buying_self = true, card = c1}) -- buying_card left for back compat, buying_self recommended to use
                 SMODS.trigger_effects({eval, post}, c1)
                 return true
                 end}))
@@ -2765,6 +2765,8 @@ end
               inc_steam_stat('demo_rounds')
               G:save_settings()
             end
+            local _tag = e.UIBox:get_UIE_by_ID('tag_container')
+            G.GAME.round_resets.blind_tag = _tag and _tag.config and _tag.config.ref_table or nil
             G.GAME.round_resets.blind = e.config.ref_table
             G.GAME.round_resets.blind_states[G.GAME.blind_on_deck] = 'Current'
             G.blind_select:remove()
@@ -2998,7 +3000,8 @@ end
     local _tag = e.UIBox:get_UIE_by_ID('tag_container')
     G.GAME.skips = (G.GAME.skips or 0) + 1
     if _tag and not G.GAME.events.ev_cry_choco2 then 
-      add_tag( next(SMODS.find_card('j_cry_kittyprinter')) and Tag('tag_cry_cat') or _tag.config.ref_table, true)
+      local tag_key = Cryptid.get_next_tag()
+      add_tag(tag_key and Tag(tag_key) or _tag.config.ref_table, true)
       local skipped, skip_to = G.GAME.blind_on_deck or 'Small', 
       G.GAME.blind_on_deck == 'Small' and 'Big' or G.GAME.blind_on_deck == 'Big' and 'Boss' or 'Boss'
       G.GAME.round_resets.blind_states[skipped] = 'Skipped'
@@ -3329,7 +3332,6 @@ G.FUNCS.wipe_on = function(message, no_card, timefac, alt_colour)
     white = {1, 1, 1, 1}
   }
   if not no_card then 
-    Jen.initialising = true
     G.screenwipecard = Card(1, 1, G.CARD_W, G.CARD_H, pseudorandom_element(G.P_CARDS), G.P_CENTERS.c_base)
     G.screenwipecard.sprite_facing = 'back'
     G.screenwipecard.facing = 'back'

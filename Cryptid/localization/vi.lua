@@ -59,8 +59,8 @@ return {
 				name = "Bộ Bài Chí Mạng",
 				text = {
 					"Sau mỗi tay bài đã chơi,",
-					"Xác suất {C:green}#1# trên 4{} cho {X:dark_edition,C:white} ^2 {} Nhân",
-					"Xác suất {C:green}#1# trên 8{} cho {X:dark_edition,C:white} ^0.5 {} Nhân",
+					"Xác suất {C:green}#1# trên #2#{} cho {X:dark_edition,C:white} ^2 {} Nhân",
+					"Xác suất {C:green}#1# trên #3#{} cho {X:dark_edition,C:white} ^0.5 {} Nhân",
 				},
 			},
 			b_cry_e_deck = {
@@ -181,7 +181,7 @@ return {
 				name = "Bộ Bài Huyền Thoại",
 				text = {
 					"Bắt đầu với một Joker {C:legendary}Huyền Thoại",
-					"Xác suất {C:green}1 trên 5{} tạo ra thêm một lá nữa",
+					"Xác suất {C:green}#1# trên #2#{} tạo ra thêm một lá nữa",
 					"khi Boss Blind bị đánh bại {C:inactive}(Phải có ô trống)",
 				},
 			},
@@ -639,7 +639,7 @@ return {
 			set_cry_poker_hand_stuff = {
 				name = "Tay Poker",
 				text = {
-					"Thêm 4 {C:attention}tay poker mới",
+					"Thêm 5 {C:attention}tay poker mới",
 					"và cho phép {C:attention}tay Thăng Thiên",
 				},
 			},
@@ -1775,7 +1775,7 @@ return {
 					"{C:attention}lượt bỏ đầu tiên{} của mỗi ván",
 				},
 			},
-			j_cry_Megg = {
+			j_cry_megg = {
 				name = "Mrứng",
 				text = {
 					"Bán lá này để tạo ra",
@@ -1797,7 +1797,7 @@ return {
 					"{X:mult,C:white}X#1#{} Nhân cho mỗi thành viên",
 					"ở trong {C:attention}Cryptid Discord{}",
 					"{C:inactive}(Hiện tại là {X:mult,C:white}X#2#{C:inactive} Nhân)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_membershipcardtwo = {
@@ -1806,7 +1806,7 @@ return {
 					"{C:chips}+#1#{} Chip cho mỗi thành viên",
 					"ở trong {C:attention}Cryptid Discord{}",
 					"{C:inactive}(Hiện tại là {C:chips}+#2#{C:inactive} Chip)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_meteor = {
@@ -2912,6 +2912,14 @@ return {
 					"trên tay",
 				},
 			},
+			c_cry_meld = {
+				name = "Pha Trộn",
+				text = {
+					"Chọn một lá {C:attention}Joker{} hoặc",
+					"{C:attention}Lá bài thường{} để",
+					"trở thành {C:dark_edition}Hai Mặt",
+				},
+			},
 			c_cry_vacuum = {
 				name = "Chân Không",
 				text = {
@@ -3352,14 +3360,6 @@ return {
 					"thành một {C:attention}Lá Vang Vọng",
 				},
 			},
-			c_cry_meld = {
-				name = "Pha Trộn",
-				text = {
-					"Chọn một lá {C:attention}Joker{} hoặc",
-					"{C:attention}Lá bài thường{} để",
-					"trở thành {C:dark_edition}Hai Mặt",
-				},
-			},
 			c_cry_theblessing = {
 				name = "Phước Lành",
 				text = {
@@ -3655,6 +3655,15 @@ return {
 			},
 		},
 		Other = {
+			alt_wheel_of_fortune = {
+				name = "Bánh Xe Số Phận",
+				text = {
+					"Xác suất {C:green}#1# trên #2#{} để thêm",
+					"ấn bản {C:dark_edition}Ánh Kim{}, {C:dark_edition}Lấp Lánh",
+					"hoặc {C:dark_edition}Đa Sắc{} cho một {C:attention}Joker",
+					"ngẫu nhiên",
+				},
+			},
 			disabled = {
 				name = "Vô Hiệu",
 				text = {
@@ -4274,6 +4283,7 @@ return {
 			cry_joke_placeholder = "(bội số của 8)",
 
 			k_code = "Code",
+			k_chips = "chip",
 			k_content_set = "Thiết Lập Chủ Đề",
 			b_content_sets = "Thiết Lập Chủ Đề",
 			--Why aren't these in vanilla?

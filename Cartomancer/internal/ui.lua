@@ -48,63 +48,8 @@ Cartomancer.config_tab = function()
     Cartomancer.log "Opened cartomancer config"
     local vertical_tabs = {}
 
-    choose_tab "compact_deck"
+    choose_tab "deck_view"
 
-
-    table.insert(vertical_tabs, {
-        label = localize('carto_settings_compact_deck'),
-        chosen = is_chosen("compact_deck"),
-        tab_definition_function = function (...)
-            if Cartomancer.INTERNAL_compact_deck_area then
-                Cartomancer.INTERNAL_compact_deck_area:remove()
-                Cartomancer.INTERNAL_compact_deck_area = nil
-            end
-            local area = CardArea(
-              G.ROOM.T.x + 0.2*G.ROOM.T.w/2,G.ROOM.T.h,
-              1.1*G.CARD_W,
-              1.1*G.CARD_H, 
-              {card_limit = 300, type = 'deck'}
-            )
-            area.draw_uibox = true
-        
-            for i = 1, 300 do
-              local card = Card(G.ROOM.T.x + 0.2*G.ROOM.T.w/2,G.ROOM.T.h, G.CARD_W, G.CARD_H, G.P_CARDS[1], G.P_CENTERS.c_base, {bypass_back = G.P_CENTERS['b_red'].pos, playing_card = i, viewed_back = true})
-              area:emplace(card)
-              card.b_red = true
-              card.sprite_facing = 'back'
-              card.facing = 'back'
-            end
-            Cartomancer.INTERNAL_compact_deck_area = area
-
-            choose_tab "compact_deck"
-            -- Yellow node. Align changes the position of modes inside
-            return {n = G.UIT.ROOT, config = tab_config, nodes = {
-                
-                {n = G.UIT.R, config = {align = "cl", padding = 0.2, r = 0.1, colour = G.C.CLEAR}, nodes = {
-                    {n = G.UIT.C, config = {align = "l", padding = 0}, nodes = {
-                        create_toggle_option {
-                            ref_value = 'compact_deck_enabled',
-                            localization = 'carto_compact_deck_enabled',
-                        },
-                        create_inline_slider({ref_value = 'compact_deck_visible_cards', localization = 'carto_compact_deck_visible_cards', max_value = 300}),
-                        create_toggle_option {
-                            ref_value = 'hide_deck',
-                            localization = 'carto_hide_deck',
-                        },
-                    }},
-                    {n = G.UIT.C, config = {align = "r", minw = 2,padding = 0.1}, nodes = {
-                        {n=G.UIT.R, config={align = "cr", padding = 0}, nodes={
-                        }}
-                    }},
-                    {n = G.UIT.C, config = {align = "r", padding = 0.1}, nodes = {
-                        {n=G.UIT.R, config={align = "cr", padding = 0}, nodes={
-                            {n=G.UIT.O, config={object = area}}
-                        }}
-                    }},
-                }}
-            }}
-        end
-    })
 
     table.insert(vertical_tabs, {
         label = localize('carto_settings_deck_view'),
@@ -193,6 +138,61 @@ Cartomancer.config_tab = function()
     })
 
     table.insert(vertical_tabs, {
+        label = localize('carto_settings_compact_deck'),
+        chosen = is_chosen("compact_deck"),
+        tab_definition_function = function (...)
+            if Cartomancer.INTERNAL_compact_deck_area then
+                Cartomancer.INTERNAL_compact_deck_area:remove()
+                Cartomancer.INTERNAL_compact_deck_area = nil
+            end
+            local area = CardArea(
+              G.ROOM.T.x + 0.2*G.ROOM.T.w/2,G.ROOM.T.h,
+              1.1*G.CARD_W,
+              1.1*G.CARD_H, 
+              {card_limit = 300, type = 'deck'}
+            )
+            area.draw_uibox = true
+        
+            for i = 1, 300 do
+              local card = Card(G.ROOM.T.x + 0.2*G.ROOM.T.w/2,G.ROOM.T.h, G.CARD_W, G.CARD_H, G.P_CARDS[1], G.P_CENTERS.c_base, {bypass_back = G.P_CENTERS['b_red'].pos, playing_card = i, viewed_back = true})
+              area:emplace(card)
+              card.b_red = true
+              card.sprite_facing = 'back'
+              card.facing = 'back'
+            end
+            Cartomancer.INTERNAL_compact_deck_area = area
+
+            choose_tab "compact_deck"
+            -- Yellow node. Align changes the position of modes inside
+            return {n = G.UIT.ROOT, config = tab_config, nodes = {
+                
+                {n = G.UIT.R, config = {align = "cl", padding = 0.2, r = 0.1, colour = G.C.CLEAR}, nodes = {
+                    {n = G.UIT.C, config = {align = "l", padding = 0}, nodes = {
+                        create_toggle_option {
+                            ref_value = 'compact_deck_enabled',
+                            localization = 'carto_compact_deck_enabled',
+                        },
+                        create_inline_slider({ref_value = 'compact_deck_visible_cards', localization = 'carto_compact_deck_visible_cards', max_value = 300}),
+                        create_toggle_option {
+                            ref_value = 'hide_deck',
+                            localization = 'carto_hide_deck',
+                        },
+                    }},
+                    {n = G.UIT.C, config = {align = "r", minw = 2,padding = 0.1}, nodes = {
+                        {n=G.UIT.R, config={align = "cr", padding = 0}, nodes={
+                        }}
+                    }},
+                    {n = G.UIT.C, config = {align = "r", padding = 0.1}, nodes = {
+                        {n=G.UIT.R, config={align = "cr", padding = 0}, nodes={
+                            {n=G.UIT.O, config={object = area}}
+                        }}
+                    }},
+                }}
+            }}
+        end
+    })
+
+    table.insert(vertical_tabs, {
         label = localize('carto_settings_jokers'),
         chosen = is_chosen("jokers"),
         tab_definition_function = Cartomancer.jokers_visibility_menu
@@ -202,6 +202,11 @@ Cartomancer.config_tab = function()
         label = localize('carto_settings_flames'),
         chosen = is_chosen("flames"),
         tab_definition_function = function (...)
+            local minw = 2
+            local minh = 1
+            local w = minw * 1.25
+            local h = minh * 2.5
+
             Cartomancer._INTERNAL_gasoline = 5
             local scale = 0.4
             choose_tab "flames"
@@ -223,16 +228,16 @@ Cartomancer.config_tab = function()
                     }},
                     {n = G.UIT.C, config = {align = "cm", padding = 0}, nodes = {
                         {n=G.UIT.R, config={align = "cm", minh = 1, padding = 0.1}, nodes={
-                            {n=G.UIT.C, config={align = "cr", minw = 2, minh =1, r = 0.1,colour = G.C.UI_CHIPS, id = 'hand_chip_area_cart', emboss = 0.05}, nodes={
-                                {n=G.UIT.O, config={func = 'flame_handler',no_role = true, id = 'flame_chips_cart', object = Moveable(0,0,0,0), w = 0, h = 0}},
+                            {n=G.UIT.C, config={align = "cr", minw = minw, minh =minh, r = 0.1,colour = G.C.UI_CHIPS, id = 'hand_chip_area_cart', emboss = 0.05}, nodes={
+                                {n=G.UIT.O, config={func = 'flame_handler',no_role = true, id = 'flame_chips_cart', object = Moveable(0,0,0,0), w = 0, h = 0, _w = w, _h = h}},
                                 {n=G.UIT.O, config={id = ':3_chips',object = DynaText({string = {{ref_table = {[":3"] = localize("carto_flames_chips") }, ref_value = ":3"}}, colours = {G.C.UI.TEXT_LIGHT}, font = G.LANGUAGES['en-us'].font, shadow = true, float = true, scale = scale*2})}},
                                 {n=G.UIT.B, config={w=0.1,h=0.1}},
                             }},
                             {n=G.UIT.C, config={align = "cm"}, nodes={
                                 {n=G.UIT.T, config={text = "X", lang = G.LANGUAGES['en-us'], scale = scale * 2, colour = G.C.UI_MULT, shadow = true}},
                             }},
-                            {n=G.UIT.C, config={align = "cl", minw = 2, minh=1, r = 0.1,colour = G.C.UI_MULT, id = 'hand_mult_area_cart', emboss = 0.05}, nodes={
-                                {n=G.UIT.O, config={func = 'flame_handler',no_role = true, id = 'flame_mult_cart', object = Moveable(0,0,0,0), w = 0, h = 0}},
+                            {n=G.UIT.C, config={align = "cl", minw = minw, minh=minh, r = 0.1,colour = G.C.UI_MULT, id = 'hand_mult_area_cart', emboss = 0.05}, nodes={
+                                {n=G.UIT.O, config={func = 'flame_handler',no_role = true, id = 'flame_mult_cart', object = Moveable(0,0,0,0), w = 0, h = 0, _w = w, _h = h}},
                                 {n=G.UIT.B, config={w=0.1,h=0.1}},
                                 {n=G.UIT.O, config={id = ':3_mult',object = DynaText({string = {{ref_table = {[":3"] = localize("carto_flames_mult") }, ref_value = ":3"}}, colours = {G.C.UI.TEXT_LIGHT}, font = G.LANGUAGES['en-us'].font, shadow = true, float = true, scale = scale*2})}},
                             }}

@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'ad4ab990fd99f94b000bc369ba8e881e81d1c7b9fdb5c2b2939f823c5bbeec33'
+LOVELY_INTEGRITY = '5bdb002d794f1456ce0e1a0c4ba985fab9ed510e491dad7988a4d41aab8a1d98'
 
 --class
 Blind = Moveable:extend()
@@ -85,6 +85,7 @@ end
 function Blind:set_blind(blind, reset, silent)
     if not reset then
         self.config.blind = blind or {}
+        self.effect = type(self.config.blind.config) == "table" and copy_table(self.config.blind.config) or {}
         self.name = blind and blind.name or ''
         self.dollars = blind and blind.dollars or 0
         self.sound_pings = self.dollars + 2
@@ -632,8 +633,10 @@ function Blind:drawn_to_hand()
             if not any_forced then 
                 G.hand:unhighlight_all()
                 local forced_card = pseudorandom_element(G.hand.cards, pseudoseed('cerulean_bell'))
+                if forced_card then
                 forced_card.ability.forced_selection = true
                 G.hand:add_to_highlighted(forced_card)
+                end
             end
         elseif self.name == 'Crimson Heart' and self.prepped and G.jokers.cards[1] then
             local prev_chosen_set = {}
@@ -674,7 +677,7 @@ function Blind:stay_flipped(area, card, from_area)
             return obj:stay_flipped(area, card, from_area)
         end
         if area == G.hand then
-            if self.name == 'The Wheel' and pseudorandom(pseudoseed('wheel')) < G.GAME.probabilities.normal/7 then
+            if self.name == 'The Wheel' and SMODS.pseudorandom_probability(self, pseudoseed('wheel'), 1, 7, 'wheel') then
                 return true
             elseif self.name == 'The House' and G.GAME.current_round.hands_played == 0 and G.GAME.current_round.discards_used == 0 then
                 return true
@@ -777,6 +780,7 @@ end
 function Blind:save()
     local blindTable = {
         in_blind = self.in_blind,
+    effect = self.effect,
         name = self.name,
         dollars = self.dollars,
         debuff = self.debuff,
@@ -805,6 +809,7 @@ end
 
 function Blind:load(blindTable)
     self.in_blind = blindTable.in_blind
+self.effect = blindTable.effect
     self.config.blind = G.P_BLINDS[blindTable.config_blind] or {}
     
     self.name = blindTable.name

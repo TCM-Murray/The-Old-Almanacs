@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '1e9c6f18d3464e015853271e6183fee53950a441714bd417b50433fcad11e789'
+LOVELY_INTEGRITY = '56ec481d22c30f9658885b50b45c427a253da3a07bdce2a4b8a3aef34ff2fc2f'
 
 ---@class Node
 Node = Object:extend()
@@ -276,6 +276,11 @@ function Node:hover()
             }
             self.children.h_popup.states.collide.can = false
             self.children.h_popup.states.drag.can = true
+            -- Fixes styled info_queue names
+            -- This ensures show_infotip runs just after the main hover box is created instead of being able to fall one frame after
+            if ((self.children.h_popup.UIRoot.children[1] or {}).config or {}).func == "show_infotip" then
+              G.FUNCS.show_infotip(self.children.h_popup.UIRoot.children[1])
+            end
         end
     end
 end

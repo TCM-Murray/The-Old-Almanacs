@@ -267,6 +267,68 @@ SMODS.PokerHand({
 		return
 	end,
 })
+
+SMODS.PokerHand({
+	key = "None",
+	visible = false,
+	chips = 0,
+	mult = 0,
+	l_chips = 5,
+	l_mult = 0.5,
+	example = {},
+	atlas = "poker_hands",
+	pos = { x = 0, y = 0 },
+	evaluate = function(parts, hand)
+		if Cryptid.enabled("set_cry_poker_hand_stuff") ~= true or Cryptid.enabled("c_cry_nibiru") ~= true then --or Cryptid.enabled("c_cry_asteroidbelt") ~= true then
+			return {}
+		end
+		return { hand and #hand == 0 and G.GAME.hands["cry_None"].visible and {} or nil }
+	end,
+})
+
+SMODS.PokerHand({
+	key = "Declare0",
+	visible = false,
+	chips = 0,
+	mult = 0,
+	l_chips = 0,
+	l_mult = 0,
+	example = {},
+	atlas = "poker_hands",
+	pos = { x = 0, y = 0 },
+	above_hand = "cry_UltPair",
+	order_offset = 1000,
+	evaluate = function(parts, hand) end,
+})
+SMODS.PokerHand({
+	key = "Declare1",
+	visible = false,
+	chips = 0,
+	mult = 0,
+	l_chips = 0,
+	l_mult = 0,
+	example = {},
+	atlas = "poker_hands",
+	pos = { x = 0, y = 0 },
+	above_hand = "cry_UltPair",
+	order_offset = 1001,
+	evaluate = function(parts, hand) end,
+})
+SMODS.PokerHand({
+	key = "Declare2",
+	visible = false,
+	chips = 0,
+	mult = 0,
+	l_chips = 0,
+	l_mult = 0,
+	example = {},
+	atlas = "poker_hands",
+	pos = { x = 0, y = 0 },
+	above_hand = "cry_UltPair",
+	order_offset = 1002,
+	evaluate = function(parts, hand) end,
+})
+
 SMODS.Rarity({
 	key = "exotic",
 	loc_txt = {},
@@ -281,7 +343,7 @@ SMODS.Rarity({
 	pools = { ["Joker"] = true },
 	get_weight = function(self, weight, object_type)
 		-- The game shouldn't try generating Epic Jokers when they are disabled
-		if Cryptid_config["Epic Jokers"] then
+		if Cryptid.enabled("set_cry_epic") then
 			return 0.003
 		else
 			return 0
@@ -401,6 +463,14 @@ SMODS.Atlas({
 	end,
 })
 SMODS.Sound({
+	key = "forcetrigger",
+	path = "forcetrigger.ogg",
+})
+SMODS.Sound({
+	key = "demitrigger",
+	path = "demitrigger.ogg",
+})
+SMODS.Sound({
 	key = "meow1",
 	path = "meow1.ogg",
 })
@@ -470,32 +540,44 @@ SMODS.Sound({
 			and Cryptid_config.Cryptid
 			and Cryptid_config.Cryptid.jimball_music
 			-- Lowering priority for edition Jimballs later
-			and 7
+			and 200
 	end,
 })
 SMODS.Sound({
 	key = "music_code",
 	path = "music_code.ogg",
 	select_music_track = function()
-		return Cryptid_config.Cryptid
+		return (
+			Cryptid_config.Cryptid
 			and Cryptid_config.Cryptid.code_music
 			and (
-				(
-					G.pack_cards
-					and G.pack_cards.cards
-					and G.pack_cards.cards[1]
-					and G.pack_cards.cards[1].ability.set == "Code"
-				) or (G.GAME and G.GAME.USING_CODE)
+								-- in a code pack
+(
+					G.booster_pack
+					and not G.booster_pack.REMOVED
+					and SMODS.OPENED_BOOSTER
+					and SMODS.OPENED_BOOSTER.config.center.kind == "Code"
+				)
+				-- using a code card
+				or (G.GAME and G.GAME.USING_CODE)
 			)
+		) and 100
 	end,
 })
 SMODS.Sound({
 	key = "music_big",
 	path = "music_big.ogg",
 	select_music_track = function()
-		return Cryptid_config.Cryptid
+		if G.GAME.cry_music_big then
+			return G.GAME.cry_music_big
+		elseif
+			Cryptid_config.Cryptid
 			and Cryptid_config.Cryptid.big_music
 			and to_big(G.GAME.round_scores["hand"].amt) > to_big(10) ^ 1000000
+		then
+			G.GAME.cry_music_big = 6
+			return 100.001
+		end
 	end,
 })
 SMODS.Sound({
@@ -503,9 +585,11 @@ SMODS.Sound({
 	path = "music_exotic.ogg",
 	volume = 0.4,
 	select_music_track = function()
-		return Cryptid_config.Cryptid
+		return (
+			Cryptid_config.Cryptid
 			and Cryptid_config.Cryptid.exotic_music
 			and #Cryptid.advanced_find_joker(nil, "cry_exotic", nil, nil, true) ~= 0
+		) and 100.002
 	end,
 })
 SMODS.Sound({
@@ -662,7 +746,7 @@ SMODS.UndiscoveredSprite({
 	key = "Code",
 	atlas = "atlasnotjokers",
 	path = "atlasnotjokers.png",
-	pos = { x = 9, y = 5 },
+	pos = { x = 12, y = 6 },
 	px = 71,
 	py = 95,
 })
@@ -678,6 +762,15 @@ SMODS.Atlas({
 	key = "blinds",
 	atlas_table = "ANIMATION_ATLAS",
 	path = "bl_cry.png",
+	px = 34,
+	py = 34,
+	frames = 21,
+})
+--splitting these up because like more than 20 on one atlas is a crime
+SMODS.Atlas({
+	key = "blinds_two",
+	atlas_table = "ANIMATION_ATLAS",
+	path = "bl_cry_two.png",
 	px = 34,
 	py = 34,
 	frames = 21,
@@ -702,4 +795,98 @@ SMODS.Atlas({
 	path = "atlasSleeves.png",
 	px = 73,
 	py = 95,
+})
+SMODS.Atlas({
+	key = "glowingSleeve",
+	path = "sleeve_cry_glowing.png",
+	px = 73,
+	py = 95,
+})
+-- Scoring Calculation for The Tax
+SMODS.Scoring_Calculation({
+	key = "tax",
+	func = function(self, chips, mult, flames)
+		return math.floor(math.min(0.4 * G.GAME.blind.chips, chips * mult) + 0.5)
+	end,
+	replace_ui = function(self)
+		local aaa = 40
+		local bbb = localize({ type = "variable", key = "tax_hand", vars = { aaa } })[1]
+		-- rebuild the ui to change colours and add text and stuff
+		-- SMODS made some stuff for this so that's kinda convienient ig
+		return {
+			n = G.UIT.R,
+			config = { minh = 1.2, align = "cm" },
+			nodes = {
+				{
+					n = G.UIT.C,
+					config = { align = "cm" },
+					nodes = {
+						{
+							n = G.UIT.R,
+							config = { align = "cm", minh = 1, padding = 0.1 },
+							nodes = {
+								-- Chips box
+								{
+									n = G.UIT.C,
+									config = { align = "cm", id = "hand_chips_container" },
+									nodes = {
+										SMODS.GUI.score_container({
+											type = "chips",
+											text = "chip_text",
+											align = "cr",
+											colour = G.C.CRY_TAX_CHIPS,
+										}),
+									},
+								},
+								-- Operator thingy (Stays the same)
+								SMODS.GUI.operator(0.4),
+								-- Mult box
+								{
+									n = G.UIT.C,
+									config = { align = "cm", id = "hand_mult_container" },
+									nodes = {
+										SMODS.GUI.score_container({
+											type = "mult",
+											colour = G.C.CRY_TAX_MULT,
+										}),
+									},
+								},
+							},
+						},
+						-- Text
+						{
+							n = G.UIT.R,
+							config = { align = "cm" },
+							nodes = {
+								{
+									n = G.UIT.T,
+									config = { text = bbb, scale = 0.25, colour = G.C.IMPORTANT },
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	end,
+})
+
+-- Scoring Calculation for The Chromatic
+SMODS.Scoring_Calculation({
+	key = "chromatic",
+	func = function(self, chips, mult, flames)
+		if Cryptid.safe_get(G, "GAME", "chromatic_mod") then
+			if G.GAME.chromatic_mod % 2 == 1 then
+				return chips * mult * -1
+			end
+		end
+		return chips * mult
+	end,
+	update_ui = function(self, container, chip_display, mult_display, operator)
+		local aaa = Cryptid.safe_get(G, "GAME", "chromatic_mod") or -1
+		if aaa > 0 and aaa % 2 == 1 then
+			ease_colour(G.C.UI_CHIPS, HEX("a34f98"), 0.3)
+			ease_colour(G.C.UI_MULT, HEX("a34f98"), 0.3)
+		end
+	end,
 })

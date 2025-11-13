@@ -52,8 +52,8 @@ return {
 				name = "Krytyczna Talia",
 				text = {
 					"Po każdej zagranej ręce,",
-					"{C:green}#1# na 4{} szans na mnożnik {X:dark_edition,C:white} ^2 {}",
-					"{C:green}#1# na 8{} szans na mnożnik {X:dark_edition,C:white} ^0.5 {}",
+					"{C:green}#1# na #2#{} szans na mnożnik {X:dark_edition,C:white} ^2 {}",
+					"{C:green}#1# na #3#{} szans na mnożnik {X:dark_edition,C:white} ^0.5 {}",
 				},
 			},
 			b_cry_encoded = {
@@ -136,7 +136,7 @@ return {
 				name = "Legendarna Talia",
 				text = {
 					"Rozpoczynasz podejście z {C:legendary}legendarnym{C:legendary} jokerem",
-					"{C:green}1 in 5{} szans na dodanie kolejnego",
+					"{C:green}#1# in #2#{} szans na dodanie kolejnego",
 					"po pokonaniu przeszkadzajki bossa",
 					"{C:inactive}(wymaga miejsca){}",
 				},
@@ -1426,7 +1426,7 @@ return {
 					"{C:attention}pierwsza zrzutka{} rundy",
 				},
 			},
-			j_cry_Megg = {
+			j_cry_megg = {
 				name = "M-Jajko",
 				text = {
 					"Sprzedaj tę kartę, aby stworzyć",
@@ -1448,7 +1448,7 @@ return {
 					"Mnoż. {X:mult,C:white}X#1#{} za każdego członka",
 					"discordowego serwera {C:attention}Cryptid{}",
 					"{C:inactive}(obecny mnoż.: {X:mult,C:white}X#2#{C:inactive}",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_membershipcardtwo = {
@@ -1457,7 +1457,7 @@ return {
 					"{C:chips}+#1#{} za każdego członka",
 					"discordowego serwera {C:attention}Cryptid{}",
 					"{C:inactive}(obecnie: {C:chips}+#2#{C:inactive} żet.)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_meteor = {
@@ -2475,6 +2475,14 @@ return {
 					"karty w ręcę",
 				},
 			},
+			c_cry_meld = {
+				name = "Wtopienie",
+				text = {
+					"Wybierz {C:attention}jokera{} lub",
+					"{C:attention}kartę rozgrywającą{}, aby",
+					"stała się {C:dark_edition}Dwustronna",
+				},
+			},
 			c_cry_vacuum = {
 				name = "Próżnia",
 				text = {
@@ -2907,14 +2915,6 @@ return {
 					"do: {C:attention}Karta Echa",
 				},
 			},
-			c_cry_meld = {
-				name = "Wtopienie",
-				text = {
-					"Wybierz {C:attention}jokera{} lub",
-					"{C:attention}kartę rozgrywającą{}, aby",
-					"stała się {C:dark_edition}Dwustronna",
-				},
-			},
 			c_cry_theblessing = {
 				name = "Błogosławieństwo",
 				text = {
@@ -3141,6 +3141,15 @@ return {
 			},
 		},
 		Other = {
+			alt_wheel_of_fortune = {
+				name = "Koło Fortuny",
+				text = {
+					"{C:green}#1# na #2#{} szans zamiany",
+					"losowego {C:attention}jokera na jego wersję",
+					"{C:dark_edition}w folii{}, {C:dark_edition}holograficzną{} lub",
+					"{C:dark_edition}polichromowaną{}",
+				},
+			},
 			banana = {
 				name = "Bananowy",
 				text = {
@@ -3653,6 +3662,7 @@ return {
 			cry_debuff_obsidian_orb = "Aplikuje zdolności wszystkich pokonanych bossów",
 
 			k_code = "Kod",
+			k_chips = "żet",
 			k_unique = "Unikalny",
 			b_code_cards = "Karty Kodowe",
 			b_unique_cards = "Unikalne Karty",

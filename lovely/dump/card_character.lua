@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '66bfc7dc22ba60b7f7ed3b42652d5482c7a8da16acb2b02cc59ea34ec6918704'
+LOVELY_INTEGRITY = '3afc9ab32fe10ba378e033b9fdfdae6b4e2afe8b84ca75c3c67eb38960f26048'
 
 --class
 Card_Character = Moveable:extend()
@@ -11,9 +11,9 @@ function Card_Character:init(args)
 
     self.children = {}
     self.config = {args = args}
-    self.children.card = Card(self.T.x, self.T.y, G.CARD_W, G.CARD_H, G.P_CARDS.empty, args.center or G.P_CENTERS.j_jolly, {bypass_discovery_center = true})
+    self.children.card = Card(self.T.x, self.T.y, G.CARD_W, G.CARD_H, G.P_CARDS.empty, args.center and G.P_CENTERS[args.center] or G.P_CENTERS.j_joker, {bypass_discovery_center = true})
     self.children.card.states.visible = false
-    self.children.card:start_materialize({G.C.BLUE, G.C.WHITE, G.C.RED})
+    self.children.card:start_materialize({args.materialize_colours and args.materialize_colours[1] or G.C.BLUE, args.materialize_colours and args.materialize_colours[2] or G.C.WHITE, args.materialize_colours and args.materialize_colours[3] or G.C.RED})
     self.children.card:set_alignment{
         major = self, type = 'cm', offset = {x=0, y=0}
     }
@@ -30,7 +30,7 @@ function Card_Character:init(args)
         speed = 1.2,
         lifespan = 2,
         attach = self,
-        colours = {G.C.CRY_EXOTIC, G.C.BLUE, G.C.CRY_JOLLY},
+        colours = {args.particle_colours and args.particle_colours[1] or G.C.RED, args.particle_colours and args.particle_colours[2] or G.C.BLUE, args.particle_colours and args.particle_colours[3] or G.C.ORANGE},
         fill = true
     })
     self.children.particles.static_rotation = true
@@ -74,7 +74,8 @@ function Card_Character:add_button(button, func, colour, update_func, snap_to, y
     if snap_to then G.CONTROLLER:snap_to{node = self.children.button} end
 end
 
-function Card_Character:add_speech_bubble(text_key, align, loc_vars)
+function Card_Character:add_speech_bubble(text_key, align, loc_vars, quip_args)
+    if quip_args and quip_args.text_key then text_key = quip_args.text_key end
     if self.children.speech_bubble then self.children.speech_bubble:remove() end
     self.config.speech_bubble_align = {align=align or 'bm', offset = {x=0,y=0},parent = self}
     self.children.speech_bubble = 
@@ -99,7 +100,8 @@ function Card_Character:remove_speech_bubble()
     if self.children.speech_bubble then self.children.speech_bubble:remove(); self.children.speech_bubble = nil end
 end
 
-function Card_Character:say_stuff(n, not_first)
+function Card_Character:say_stuff(n, not_first, quip_key)
+    local quip = SMODS.JimboQuips[quip_key] or {}
     self.talking = true
     if not not_first then 
         G.E_MANAGER:add_event(Event({
@@ -107,7 +109,7 @@ function Card_Character:say_stuff(n, not_first)
             delay = 0.1,
             func = function()
                 if self.children.speech_bubble then self.children.speech_bubble.states.visible = true end
-                self:say_stuff(n, true)
+                self:say_stuff(n, true, quip_key)
               return true
             end
         }))
@@ -118,14 +120,30 @@ function Card_Character:say_stuff(n, not_first)
             new_said = math.random(1, 11)
         end
         self.last_said = new_said
-        play_sound('voice'..math.random(1, 11), G.SPEEDFACTOR*(math.random()*0.2+1), 0.5)
-        self.children.card:juice_up()
+        if quip.play_sounds and type(quip.play_sounds) == 'function' then
+            quip:play_sounds(n)
+        elseif quip.extra and quip.extra.sound then
+            local custom_pitch = quip.extra.pitch
+            if type(quip.extra.sound) == 'table' then
+                for k, v in pairs(quip.extra.sound) do
+                    play_sound(v, custom_pitch or G.SPEEDFACTOR*(math.random()*0.2+1), 0.5)
+                end
+            elseif type(quip.extra.sound) == 'string' then
+                play_sound(quip.extra.sound, custom_pitch or G.SPEEDFACTOR*(math.random()*0.2+1), 0.5)
+            else
+                play_sound('voice'..math.random(1, 11), custom_pitch or G.SPEEDFACTOR*(math.random()*0.2+1), 0.5)
+            end
+        else
+            play_sound('voice'..math.random(1, 11), quip.extra and quip.extra.pitch or G.SPEEDFACTOR*(math.random()*0.2+1), 0.5)
+        end
+        local juice_params = quip.extra and quip.extra.juice or {nil, nil}
+        self.children.card:juice_up(juice_params[1], juice_params[2])
         G.E_MANAGER:add_event(Event({
             trigger = 'after',
             blockable = false, blocking = false,
-            delay = 0.13,
+            delay = quip.extra and quip.extra.delay or 0.13,
             func = function()
-                self:say_stuff(n-1, true)
+                self:say_stuff(n-1, true, quip_key)
             return true
             end
         }), 'tutorial')

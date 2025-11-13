@@ -318,14 +318,7 @@ function Card:update(dt)
 		if self.flipping == "f2b" then
 			self.flipping = "b2f"
 		end
-		self:dbl_side_flip()
-	end
-	if self.ability.cry_absolute then -- feedback loop... may be problematic
-		self.cry_absolute = true
-	end
-	if self.cry_absolute then
-		self.ability.cry_absolute = true
-		self.ability.eternal = true
+		self:flip_side()
 	end
 	if self.ability.pinned then
 		self.pinned = true
@@ -407,6 +400,7 @@ G.FUNCS.evaluate_round = function()
 	G.GAME.interest_cap = cry_best_interest_cap() -- blehhhhhh
 	--Semicolon Stuff
 	if G.GAME.current_round.semicolon then
+		G.GAME.saved_text = ";"
 		add_round_eval_row({ dollars = 0, name = "blind1", pitch = 0.95, saved = true })
 		G.E_MANAGER:add_event(Event({
 			trigger = "before",
@@ -578,7 +572,7 @@ function Card:set_eternal(_eternal)
 end
 function Card:calculate_banana()
 	if not self.ability.extinct then
-		if self.ability.banana and (pseudorandom("banana") < G.GAME.probabilities.normal / 10) then
+		if self.ability.banana and SMODS.pseudorandom_probability(self, "banana", 1, 10, "Banana Sticker") then
 			self.ability.extinct = true
 			G.E_MANAGER:add_event(Event({
 				func = function()
@@ -676,6 +670,16 @@ SMODS.Sticker:take_ownership("eternal", {
 			return { key = "cry_eternal_booster" }
 		end
 	end,
+	draw = function(self, card)
+		local notilt = nil
+		if card.area and card.area.config.type == "deck" then
+			notilt = true
+		end
+		if not card.ability.cry_absolute then
+			G.shared_stickers[self.key].role.draw_major = card
+			G.shared_stickers[self.key]:draw_shader("dissolve", nil, nil, notilt, card.children.center)
+		end
+	end,
 })
 SMODS.Sticker:take_ownership("rental", {
 	loc_vars = function(self, info_queue, card)
@@ -713,13 +717,16 @@ SMODS.Sticker({
 	should_apply = false,
 	loc_vars = function(self, info_queue, card)
 		if card.ability.consumeable then
-			return { key = "cry_banana_consumeable", vars = { G.GAME.probabilities.normal or 1, 4 } }
+			return {
+				key = "cry_banana_consumeable",
+				vars = { SMODS.get_probability_vars(card, 1, 4, "Banana Sticker") },
+			}
 		elseif card.ability.set == "Voucher" then
-			return { key = "cry_banana_voucher", vars = { G.GAME.probabilities.normal or 1, 12 } }
+			return { key = "cry_banana_voucher", vars = { SMODS.get_probability_vars(card, 1, 12, "Banana Sticker") } }
 		elseif card.ability.set == "Booster" then
 			return { key = "cry_banana_booster" }
 		else
-			return { vars = { G.GAME.probabilities.normal or 1, 10 } }
+			return { vars = { SMODS.get_probability_vars(card, 1, 10, "Banana Sticker") } }
 		end
 	end,
 	calculate = function(self, card, context)
@@ -730,7 +737,15 @@ SMODS.Sticker({
 			and not context.individual
 		then
 			if card.ability.set == "Voucher" then
-				if pseudorandom("byebyevoucher") < G.GAME.probabilities.normal / G.GAME.cry_voucher_banana_odds then
+				if
+					SMODS.pseudorandom_probability(
+						card,
+						"byebyevoucher",
+						1,
+						G.GAME.cry_voucher_banana_odds,
+						"Banana Sticker"
+					)
+				then
 					local area
 					if G.STATE == G.STATES.HAND_PLAYED then
 						if not G.redeemed_vouchers_during_hand then
@@ -873,78 +888,70 @@ function G.UIDEF.used_vouchers()
 		{ n = G.UIT.R, config = { align = "cm", padding = 0, no_fill = true }, nodes = voucher_tables }
 	)
 
+	-- Code by IcyEthics: Generates sliders dynamically
+	local cryptid_voucher_nodes = {}
+	if silent then
+		for i, _info in ipairs(Cryptid.voucher_acclimator_data) do
+			if next(SMODS.find_card(_info.voucher_key)) then
+				cryptid_voucher_nodes[#cryptid_voucher_nodes + 1] = {
+					n = G.UIT.R,
+					config = { align = "cm" },
+					nodes = {
+						create_slider({
+							label = localize(_info.localization_key),
+							label_scale = 0.4,
+							text_scale = 0.3,
+							w = 4,
+							h = 0.4,
+							ref_table = G.GAME.cry_percrate,
+							ref_value = _info.ref_value,
+							colour = _info.colour,
+							min = 0,
+							max = 100,
+						}),
+					},
+				}
+			end
+		end
+
+		cryptid_voucher_nodes[#cryptid_voucher_nodes + 1] = {
+			n = G.UIT.R,
+			config = { align = "cm" },
+			nodes = {
+				{
+					n = G.UIT.O,
+					config = {
+						object = DynaText({
+							string = { localize("ph_vouchers_redeemed") },
+							colours = { G.C.UI.TEXT_LIGHT },
+							bump = true,
+							scale = 0.6,
+						}),
+					},
+				},
+			},
+		}
+
+		cryptid_voucher_nodes[#cryptid_voucher_nodes + 1] = {
+			n = G.UIT.R,
+			config = { align = "cm", minh = 0.5 },
+			nodes = {},
+		}
+
+		cryptid_voucher_nodes[#cryptid_voucher_nodes + 1] = {
+			n = G.UIT.R,
+			config = { align = "cm", colour = G.C.BLACK, r = 1, padding = 0.15, emboss = 0.05 },
+			nodes = {
+				{ n = G.UIT.R, config = { align = "cm" }, nodes = voucher_table_rows },
+			},
+		}
+	end
+
 	local t = silent
 			and {
 				n = G.UIT.ROOT,
 				config = { align = "cm", colour = G.C.CLEAR },
-				nodes = {
-
-					-- tarot/planet acclimator sliders
-					next(SMODS.find_card("v_cry_tacclimator"))
-							and {
-								n = G.UIT.R,
-								config = { align = "cm" },
-								nodes = {
-									create_slider({
-										label = localize("b_tarot_rate"),
-										label_scale = 0.4,
-										text_scale = 0.3,
-										w = 4,
-										h = 0.4,
-										ref_table = G.GAME.cry_percrate,
-										ref_value = "tarot",
-										colour = G.C.SECONDARY_SET.Tarot,
-										min = 0,
-										max = 100,
-									}),
-								},
-							}
-						or nil,
-					next(SMODS.find_card("v_cry_pacclimator")) and {
-						n = G.UIT.R,
-						config = { align = "cm" },
-						nodes = {
-							create_slider({
-								label = localize("b_planet_rate"),
-								label_scale = 0.4,
-								text_scale = 0.3,
-								w = 4,
-								h = 0.4,
-								ref_table = G.GAME.cry_percrate,
-								ref_value = "planet",
-								colour = G.C.SECONDARY_SET.Planet,
-								min = 0,
-								max = 100,
-							}),
-						},
-					} or nil,
-
-					{
-						n = G.UIT.R,
-						config = { align = "cm" },
-						nodes = {
-							{
-								n = G.UIT.O,
-								config = {
-									object = DynaText({
-										string = { localize("ph_vouchers_redeemed") },
-										colours = { G.C.UI.TEXT_LIGHT },
-										bump = true,
-										scale = 0.6,
-									}),
-								},
-							},
-						},
-					},
-					{ n = G.UIT.R, config = { align = "cm", minh = 0.5 }, nodes = {} },
-					{
-						n = G.UIT.R,
-						config = { align = "cm", colour = G.C.BLACK, r = 1, padding = 0.15, emboss = 0.05 },
-						nodes = {
-							{ n = G.UIT.R, config = { align = "cm" }, nodes = voucher_table_rows },
-						},
-					},
-				},
+				nodes = cryptid_voucher_nodes,
 			}
 		or {
 			n = G.UIT.ROOT,

@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'ae8924b167c872ad0775941f26c3252a3f75ee44f5611c59a0a9b2bfaf6fe1e5'
+LOVELY_INTEGRITY = 'f420c47bb503b5cca3367ac1a74c71a78bbd1b9aefa0f446bef72c71fb878d81'
 
 VERSION = '1.0.1o'
 VERSION = VERSION..'-FULL'
@@ -287,6 +287,7 @@ function Game:set_globals()
     --||||||||||||||||||||||||||||||
     self.STATES = {    
         SMODS_BOOSTER_OPENED = 999,
+        SMODS_REDEEM_VOUCHER = 998,
         SELECTING_HAND = 1,
         HAND_PLAYED = 2,
         DRAW_TO_HAND = 3,
@@ -379,9 +380,6 @@ function Game:set_globals()
         JOKER_GREY = HEX('bfc7d5'),
         VOUCHER = HEX("cb724c"),
         BOOSTER = HEX("646eb7"),
-        jen_RGB = {0,0,0,1},
-        jen_RGB_HUE = 0,
-        almanac = {0,0,1,1},
         EDITION = {1,1,1,1},
         DARK_EDITION = {0,0,0,1},
         ETERNAL = HEX('c75985'),
@@ -512,7 +510,6 @@ function Game:set_globals()
         y = G.F_SWAP_XY_BUTTONS and 'x' or nil,
         x = G.F_SWAP_XY_BUTTONS and 'y' or nil,
     }
-    self.C.CHIPS_REQUIRED = {0, 0, 0, 1}
     self.keybind_mapping = {{
         a = 'dpleft',
         d = 'dpright',

@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '48712953ba8d183fbfd25a659536a8c0659da2aaafe6c0e24c9c78735462d5e8'
+LOVELY_INTEGRITY = 'a3c177f7e2d190bbd37485fb4a034f70b12a3be0ea6e88782e7699df82304997'
 
 --[[
 MIT License
@@ -37,8 +37,8 @@ function STR_PACK(data, recursive)
         v = "to_big("..v.m..","..v.e..")"
         elseif v.array and v.sign then
         	local v0 = "to_big({"
-        	for qi = 1,#v.array do
-        		v0 = v0 .. v.array[qi] .. ", "
+        	for i, v in pairs(v.array) do
+        		v0 = v0 .. ("["..i.."] = "..(v or 0)) .. ", "
         	end
         	v0 = v0 .. "},"..v.sign..")"
         	v = v0
@@ -78,6 +78,6 @@ end
 
 function compress_and_save(_file, _data)
     local save_string = type(_data) == 'table' and STR_PACK(_data) or _data
-    save_string = love.data.compress('string', 'deflate', save_string, math.max(1, math.min(((Jen or {}).config or {}).save_compression_level or 1, 9)))
+    save_string = love.data.compress('string', 'deflate', save_string, 1)
     love.filesystem.write(_file,save_string)
 end

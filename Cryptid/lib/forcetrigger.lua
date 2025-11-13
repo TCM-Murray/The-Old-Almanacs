@@ -1,18 +1,14 @@
 -- everything demicolon needs (not really as simple anymore)
-SMODS.Sound({
-	key = "forcetrigger",
-	path = "forcetrigger.ogg",
-})
-SMODS.Sound({
-	key = "demitrigger",
-	path = "demitrigger.ogg",
-})
 function Cryptid.demicolonGetTriggerable(card)
 	local n = { false, false }
 	if not card then
 		return n
 	end
-	if Card.no(card, "demicoloncompat", true) or Cryptid.forcetriggerVanillaCheck(card) then
+	if
+		Card.no(card, "demicoloncompat", true)
+		or Card.no(card, "demicolon_compat", true)
+		or Cryptid.forcetriggerVanillaCheck(card)
+	then
 		n[1] = true
 	else
 		n[1] = false
@@ -29,13 +25,15 @@ function Cryptid.forcetrigger(card, context)
 	end
 	local results = {}
 	local check = Cryptid.forcetriggerVanillaCheck(card)
-	G.E_MANAGER:add_event(Event({
-		trigger = "before",
-		func = function()
-			play_sound("cry_forcetrigger", 1, 0.6)
-			return true
-		end,
-	}))
+	if not Talisman.config_file.disable_anims then
+		G.E_MANAGER:add_event(Event({
+			trigger = "before",
+			func = function()
+				play_sound("cry_forcetrigger", 1, 0.6)
+				return true
+			end,
+		}))
+	end
 	if not check and card.ability.set == "Joker" then
 		local demicontext = Cryptid.deep_copy(context)
 		demicontext.forcetrigger = true
@@ -112,7 +110,7 @@ function Cryptid.forcetrigger(card, context)
 				my_pos
 				and G.jokers.cards[my_pos + 1]
 				and not card.getting_sliced
-				and not G.jokers.cards[my_pos + 1].ability.eternal
+				and not SMODS.is_eternal(G.jokers.cards[my_pos + 1])
 				and not G.jokers.cards[my_pos + 1].getting_sliced
 			then
 				local sliced_card = G.jokers.cards[my_pos + 1]
@@ -121,13 +119,19 @@ function Cryptid.forcetrigger(card, context)
 				G.E_MANAGER:add_event(Event({
 					func = function()
 						G.GAME.joker_buffer = 0
-						card.ability.mult = card.ability.mult + sliced_card.sell_cost * 2
 						card:juice_up(0.8, 0.8)
 						sliced_card:start_dissolve({ HEX("57ecab") }, nil, 1.6)
 						play_sound("slice1", 0.96 + math.random() * 0.08)
 						return true
 					end,
 				}))
+				SMODS.scale_card(card, {
+					ref_table = card.ability,
+					ref_value = "mult",
+					scalar_table = { cost = sliced_card.sell_cost * 2 },
+					scalar_value = "cost",
+					no_message = true,
+				})
 			end
 			results = { jokers = { mult_mod = card.ability.mult, card = card } }
 		end
@@ -240,10 +244,18 @@ function Cryptid.forcetrigger(card, context)
 			ease_dollars(2)
 		end
 		if card.ability.name == "Supernova" then
-			results = { jokers = { mult_mod = G.GAME.hands[context.scoring_name].played, card = card } }
+			local hand = context.other_context and context.other_context.scoring_name or context.scoring_name
+			if hand then
+				results = { jokers = { mult_mod = G.GAME.hands[hand].played, card = card } }
+			end
 		end
 		if card.ability.name == "Ride The Bus" then
-			card.ability.mult = card.ability.mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { mult_mod = card.ability.mult, card = card } }
 		end
 		if card.ability.name == "Space Joker" then
@@ -266,7 +278,12 @@ function Cryptid.forcetrigger(card, context)
 		end
 		-- page 4
 		if card.ability.name == "Egg" then
-			card.ability.extra_value = card.ability.extra_value + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "extra_value",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			card:set_cost()
 		end
 		if card.ability.name == "Burglar" then
@@ -282,11 +299,22 @@ function Cryptid.forcetrigger(card, context)
 			results = { jokers = { Xmult_mod = card.ability.extra, card = card } }
 		end
 		if card.ability.name == "Runner" then
-			card.ability.extra.chips = card.ability.extra.chips + card.ability.extra.chip_mod
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "chips",
+				scalar_value = "chip_mod",
+				no_message = true,
+			})
 			results = { jokers = { chips = card.ability.extra.chips, card = card } }
 		end
 		if card.ability.name == "Ice Cream" then
-			card.ability.extra.chips = card.ability.extra.chips - card.ability.extra.chip_mod
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "chips",
+				scalar_value = "chip_mod",
+				operation = "-",
+				no_message = true,
+			})
 			results = { jokers = { chips = card.ability.extra.chips, card = card } }
 			if card.ability.extra.chips - card.ability.extra.chip_mod <= 0 then
 				G.E_MANAGER:add_event(Event({
@@ -349,7 +377,12 @@ function Cryptid.forcetrigger(card, context)
 			}))
 		end
 		if card.ability.name == "Constellation" then
-			card.ability.x_mult = card.ability.x_mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		-- if card.ability.name == "Hiker" then results = { jokers = { }, } end
@@ -407,16 +440,20 @@ function Cryptid.forcetrigger(card, context)
 			results = { jokers = { Xmult_mod = card.ability.extra.Xmult, card = card } }
 		end
 		if card.ability.name == "Red Card" then
-			card.ability.mult = card.ability.mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { mult_mod = card.ability.mult, card = card } }
 		end
 		if card.ability.name == "Madness" then
-			card.ability.x_mult = card.ability.x_mult + card.ability.extra
 			local destructable_jokers = {}
 			for i = 1, #G.jokers.cards do
 				if
 					G.jokers.cards[i] ~= card
-					and not G.jokers.cards[i].ability.eternal
+					and not SMODS.is_eternal(G.jokers.cards[i])
 					and not G.jokers.cards[i].getting_sliced
 				then
 					destructable_jokers[#destructable_jokers + 1] = G.jokers.cards[i]
@@ -436,6 +473,12 @@ function Cryptid.forcetrigger(card, context)
 					end,
 				}))
 			end
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		if card.ability.name == "Square Joker" then
@@ -473,8 +516,6 @@ function Cryptid.forcetrigger(card, context)
 			}))
 		end
 		if card.ability.name == "Vampire" then
-			local check = nil
-			local enhanced = {}
 			if context.scoring_hand and #context.scoring_hand > 0 then
 				for k, v in ipairs(context.scoring_hand) do
 					if v.config.center ~= G.P_CENTERS.c_base and not v.debuff and not v.vampired then
@@ -484,9 +525,7 @@ function Cryptid.forcetrigger(card, context)
 					end
 					v.vampired = nil
 				end
-				check = true
-			end
-			if not check and G and G.hand and #G.hand.highlighted > 0 then
+			elseif G and G.hand and #G.hand.highlighted > 0 then
 				for k, v in ipairs(G.hand.highlighted) do
 					if v.config.center ~= G.P_CENTERS.c_base and not v.debuff and not v.vampired then
 						enhanced[#enhanced + 1] = v
@@ -495,14 +534,23 @@ function Cryptid.forcetrigger(card, context)
 					end
 					v.vampired = nil
 				end
-				check = true
 			end
-			card.ability.x_mult = card.ability.x_mult + (card.ability.extra * #enhanced or 1)
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		-- if card.ability.name == "Shortcut" then results = { jokers = { } } end
 		if card.ability.name == "Hologram" then
-			card.ability.x_mult = card.ability.x_mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		if card.ability.name == "Vagabond" then
@@ -530,16 +578,25 @@ function Cryptid.forcetrigger(card, context)
 			end
 		end
 		if card.ability.name == "Rocket" then
-			card.ability.extra.dollars = card.ability.extra.dollars + card.ability.extra.increase
+			SMODS.scale_card(card, {
+				ref_table = card.ability.extra,
+				ref_value = "dollars",
+				scalar_value = "increase",
+				no_message = true,
+			})
 			ease_dollars(card.ability.extra.dollars)
 		end
 		if card.ability.name == "Obelisk" then -- Sobelisk
-			card.ability.x_mult = card.ability.x_mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		-- page 6
 		if card.ability.name == "Midas Mask" then
-			local check = nil
 			if context.scoring_hand then
 				for k, v in ipairs(context.scoring_hand) do
 					if v:is_face() then
@@ -554,10 +611,8 @@ function Cryptid.forcetrigger(card, context)
 						}))
 					end
 				end
-				check = true
-			end
-			if not check and G and G.hand and #G.hand.highlighted > 0 then
-				for k, v in ipairs(context.scoring_hand) do
+			elseif G and G.hand and #G.hand.highlighted > 0 then
+				for k, v in ipairs(G.hand.highlighted) do
 					if v:is_face() then
 						v:set_ability(G.P_CENTERS.m_gold, nil, true)
 						G.E_MANAGER:add_event(Event({
@@ -570,7 +625,6 @@ function Cryptid.forcetrigger(card, context)
 						}))
 					end
 				end
-				check = true
 			end
 		end
 		if card.ability.name == "Luchador" then
@@ -597,7 +651,13 @@ function Cryptid.forcetrigger(card, context)
 		end
 		if card.ability.name == "Turtle Bean" then
 			G.hand:change_size(-card.ability.extra.h_size)
-			card.ability.extra.h_size = card.ability.extra.h_size - card.ability.extra.h_mod
+			SMODS.scale_card(card, {
+				ref_table = card.ability.extra,
+				ref_value = "h_size",
+				scalar_value = "h_mod",
+				operation = "-",
+				no_message = true,
+			})
 			G.hand:change_size(card.ability.extra.h_size)
 		end
 		if card.ability.name == "Erosion" then
@@ -670,22 +730,44 @@ function Cryptid.forcetrigger(card, context)
 			ease_dollars(card.ability.extra)
 		end
 		if card.ability.name == "Flash Card" then
-			card.ability.mult = card.ability.mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { mult_mod = card.ability.mult, card = card } }
 		end
 		if card.ability.name == "Popcorn" then
-			card.ability.mult = card.ability.mult - card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "mult",
+				scalar_value = "extra",
+				operation = "-",
+				no_message = true,
+			})
 			results = { jokers = { mult_mod = card.ability.mult, card = card } }
 		end
 		if card.ability.name == "Spare Trousers" then
-			card.ability.mult = card.ability.mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { mult_mod = card.ability.mult, card = card } }
 		end
 		if card.ability.name == "Ancient Joker" then
 			results = { jokers = { Xmult_mod = card.ability.extra, card = card } }
 		end
 		if card.ability.name == "Ramen" then
-			card.ability.x_mult = card.ability.x_mult - card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				operation = "-",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		if card.ability.name == "Walkie Talkie" then
@@ -693,14 +775,24 @@ function Cryptid.forcetrigger(card, context)
 		end
 		-- if card.ability.name == "Seltzer" then results = { jokers = { } } end
 		if card.ability.name == "Castle" then
-			card.ability.extra.chips = card.ability.extra.chips + card.ability.extra.chip_mod
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "chips",
+				scalar_value = "chip_mod",
+				no_message = true,
+			})
 			results = { jokers = { chips = card.ability.extra.chips, card = card } }
 		end
 		if card.ability.name == "Smiley Face" then
 			results = { jokers = { mult_mod = card.ability.extra, card = card } }
 		end
 		if card.ability.name == "Campfire" then
-			card.ability.x_mult = card.ability.x_mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		-- page 8
@@ -753,7 +845,12 @@ function Cryptid.forcetrigger(card, context)
 			results = { jokers = { mult_mod = card.ability.extra, card = card } }
 		end
 		if card.ability.name == "Glass Joker" then
-			card.ability.x_mult = card.ability.x_mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		-- page 9
@@ -763,7 +860,12 @@ function Cryptid.forcetrigger(card, context)
 		end
 		-- if card.ability.name == "Blueprint" then results = { jokers = { } } end
 		if card.ability.name == "Wee Joker" then
-			card.ability.extra.chips = card.ability.extra.chips + card.ability.extra.chip_mod
+			SMODS.scale_card(card, {
+				ref_table = card.ability.extra,
+				ref_value = "chips",
+				scalar_value = "chip_mod",
+				no_message = true,
+			})
 			results = { jokers = { chips = card.ability.extra.chips, card = card } }
 		end
 		if card.ability.name == "Merry Andy" then
@@ -781,7 +883,12 @@ function Cryptid.forcetrigger(card, context)
 			ease_dollars(card.ability.extra)
 		end
 		if card.ability.name == "Hit The Road" then
-			card.ability.x_mult = card.ability.x_mult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		if card.ability.name == "The Duo" then
@@ -889,14 +996,25 @@ function Cryptid.forcetrigger(card, context)
 			}
 		end
 		if card.ability.name == "Caino" then
-			card.ability.caino_xmult = card.ability.caino_xmult + card.ability.extra
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_value = "extra",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.caino_xmult, card = card } }
 		end
 		if card.ability.name == "Triboulet" then
 			results = { jokers = { Xmult_mod = card.ability.extra, card = card } }
 		end
 		if card.ability.name == "Yorick" then
-			card.ability.x_mult = card.ability.x_mult + card.ability.extra.xmult
+			SMODS.scale_card(card, {
+				ref_table = card.ability,
+				ref_value = "x_mult",
+				scalar_table = card.ability.extra,
+				scalar_value = "xmult",
+				no_message = true,
+			})
 			results = { jokers = { Xmult_mod = card.ability.x_mult, card = card } }
 		end
 		if card.ability.name == "Chicot" then
@@ -905,10 +1023,16 @@ function Cryptid.forcetrigger(card, context)
 			end
 		end
 		if card.ability.name == "Perkeo" then
-			if G.consumeables.cards[1] then
+			local eligibleJokers = {}
+			for i = 1, #G.consumeables.cards do
+				if G.consumeables.cards[i].ability.consumeable then
+					eligibleJokers[#eligibleJokers + 1] = G.consumeables.cards[i]
+				end
+			end
+			if #eligibleJokers > 0 then
 				G.E_MANAGER:add_event(Event({
 					func = function()
-						local card = copy_card(pseudorandom_element(G.consumeables.cards, pseudoseed("perkeo")), nil)
+						local card = copy_card(pseudorandom_element(eligibleJokers, pseudoseed("perkeo")), nil)
 						card:set_edition({ negative = true }, true)
 						card:add_to_deck()
 						G.consumeables:emplace(card)
@@ -943,11 +1067,11 @@ function Cryptid.forcetrigger(card, context)
 			end
 		end
 	elseif card.ability.consumeable and Cryptid.forcetriggerConsumableCheck(card) then
+		G.cry_force_use = true
 		if
-			card.ability.consumeable.max_highlighted
-			or card.ability.name == "Aura"
-			or card.ability.name == "cry-global"
-			or card.ability.name == "cry-Inst"
+			(card.ability.consumeable.max_highlighted or card.ability.name == "Aura")
+			and not card.config.center.force_use
+			--and not card.config.center.force_use
 		then --Cards that require cards in hand to be selected
 			local _cards = {}
 			local targets = {}
@@ -955,10 +1079,8 @@ function Cryptid.forcetrigger(card, context)
 			--Get all cards that we can target
 			for k, v in ipairs(G.hand.cards) do
 				if
-					not (
-						(card.ability.name == "Aura" or card.ability.name == "cry-Ritual")
-						and (v.edition or v.will_be_editioned)
-					) and not v.will_be_destroyed
+					not ((card.ability.name == "Aura") and (v.edition or v.will_be_editioned))
+					and not v.will_be_destroyed
 				then
 					_cards[#_cards + 1] = v
 				end
@@ -970,7 +1092,7 @@ function Cryptid.forcetrigger(card, context)
 				--Choose random targets for consumable
 				for i = 1, highlight_count do
 					local selected_card, card_key = pseudorandom_element(_cards, pseudoseed("forcehighlight"))
-					if card.ability.name == "Aura" or card.ability.name == "cry-Ritual" then
+					if card.ability.name == "Aura" then
 						selected_card.will_be_editioned = true
 					end
 					if card.ability.name == "The Hanged Man" then
@@ -997,31 +1119,6 @@ function Cryptid.forcetrigger(card, context)
 
 				card:use_consumeable()
 
-				--Not sure how to do input correctly, so random is what you get.
-				if card.ability.name == "cry-Class" then
-					local choices = {
-						"bonus",
-						"mult",
-						"wild",
-						"glass",
-						"steel",
-						"stone",
-						"gold",
-						"lucky",
-						"echo",
-						"light",
-						"abstract",
-					}
-					G.ENTERED_ENH = pseudorandom_element(choices, pseudoseed("forceclass"))
-					G.FUNCS.class_cancel()
-					G.FUNCS.class_apply()
-				elseif card.ability.name == "cry-Variable" then
-					local choices = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" }
-					G.ENTERED_RANK = pseudorandom_element(choices, pseudoseed("forceclass"))
-					G.FUNCS.variable_cancel()
-					G.FUNCS.variable_apply()
-				end
-
 				G.E_MANAGER:add_event(Event({
 					func = function()
 						G.hand:unhighlight_all()
@@ -1032,165 +1129,21 @@ function Cryptid.forcetrigger(card, context)
 				--Unhighlight once events are created
 				G.hand:unhighlight_all()
 			end
-		elseif
-			card.ability.name == "cry-Commit"
-			or card.ability.name == "cry-Rework"
-			or card.ability.name == "cry-Multiply"
-		then --Cards that require Jokers to be selected
-			local _cards = {}
-
-			for k, v in ipairs(G.jokers.cards) do
-				if not v.will_be_destroyed then
-					_cards[#_cards + 1] = v
-				end
-			end
-
-			if #_cards > 0 then
-				local selected_card, card_key = pseudorandom_element(_cards, pseudoseed("forcehighlight"))
-				if card.ability.name == "cry-Commit" or card.ability.name == "cry-Rework" then
-					selected_card.will_be_destroyed = true
-				end
-				G.jokers:add_to_highlighted(selected_card, true)
-
-				G.E_MANAGER:add_event(Event({
-					func = function()
-						G.jokers:add_to_highlighted(selected_card, true)
-						selected_card.will_be_destroyed = nil
-						play_sound("card1", 1)
-						return true
-					end,
-				}))
-
-				card:use_consumeable()
-
-				G.E_MANAGER:add_event(Event({
-					func = function()
-						G.jokers:unhighlight_all()
-						return true
-					end,
-				}))
-
-				G.jokers:unhighlight_all()
-			end
-		elseif card.ability.name == "cry-conduit" or card.ability.name == "cry-Seed" then --Cards that work with both playing cards and jokers
-			local _cards = {}
-			local targets = {}
-
-			for k, v in ipairs(G.hand.cards) do
-				if not v.will_be_destroyed then
-					_cards[#_cards + 1] = v
-				end
-			end
-			for k, v in ipairs(G.jokers.cards) do
-				if not v.will_be_destroyed and v ~= card then
-					_cards[#_cards + 1] = v
-				end
-			end
-
-			local highlight_count = to_number(math.min(#_cards, card.ability.name == "cry-conduit" and 2 or 1))
-
-			if #_cards >= highlight_count then
-				for i = 1, highlight_count do
-					local selected_card, card_key = pseudorandom_element(_cards, pseudoseed("forcehighlight"))
-					targets[#targets + 1] = table.remove(_cards, card_key)
-
-					if selected_card.area == G.hand then
-						G.hand:add_to_highlighted(selected_card, true)
-					else
-						G.jokers:add_to_highlighted(selected_card, true)
-					end
-				end
-
-				G.E_MANAGER:add_event(Event({
-					func = function()
-						for _, v in ipairs(targets) do
-							if v.area == G.hand then
-								G.hand:add_to_highlighted(v, true)
-							else
-								G.jokers:add_to_highlighted(v, true)
-							end
-							play_sound("card1", 1)
-						end
-						return true
-					end,
-				}))
-
-				card:use_consumeable()
-
-				G.E_MANAGER:add_event(Event({
-					func = function()
-						G.hand:unhighlight_all()
-						G.jokers:unhighlight_all()
-						return true
-					end,
-				}))
-
-				G.hand:unhighlight_all()
-				G.jokers:unhighlight_all()
-			end
-		elseif card.ability.name == "cry-Merge" then --I banned this card from being forcetriggered after I wrote this code, but it seems a waste to delete it.
-			local _cards = {}
-			local _cards2 = {}
-
-			for k, v in ipairs(G.hand.cards) do
-				if not v.ability.consumeable and not v.will_be_destroyed and not v.will_be_merged then
-					_cards[#_cards + 1] = v
-				end
-			end
-			for k, v in ipairs(G.consumeables.cards) do
-				if
-					v.ability.consumeable
-					and not v.ability.eternal
-					and v.ability.set ~= "Unique"
-					and not v.will_be_destroyed
-					and v ~= card
-				then
-					_cards2[#_cards2 + 1] = v
-				end
-			end
-
-			if #_cards > 0 and #_cards2 > 0 then
-				local selected_card, card_key = pseudorandom_element(_cards, pseudoseed("forcehighlight"))
-				selected_card.will_be_merged = true
-				G.hand:add_to_highlighted(selected_card, true)
-
-				local selected_consum, consum_key = pseudorandom_element(_cards2, pseudoseed("forcehighlight"))
-				selected_consum.will_be_destroyed = true
-				G.consumeables:add_to_highlighted(selected_card, true)
-
-				G.E_MANAGER:add_event(Event({
-					func = function()
-						G.hand:add_to_highlighted(selected_card, true)
-						selected_card.will_be_merged = nil
-						G.consumeables:add_to_highlighted(selected_consum, true)
-						selected_card.will_be_destroyed = nil
-						return true
-					end,
-				}))
-
-				card:use_consumeable()
-
-				G.E_MANAGER:add_event(Event({
-					func = function()
-						G.hand:unhighlight_all()
-						G.consumeables:unhighlight_all()
-						return true
-					end,
-				}))
-
-				G.hand:unhighlight_all()
-				G.consumeables:unhighlight_all()
-			end
 		else
 			-- Copy rigged code to guarantee WoF and Planet.lua
 
 			local ggpn = G.GAME.probabilities.normal
 			G.GAME.probabilities.normal = 1e9
 
-			card:use_consumeable()
+			if not card.config.center.force_use then
+				card:use_consumeable()
+			else
+				card.config.center:force_use(card, card.area)
+			end
 
 			G.GAME.probabilities.normal = ggpn
 		end
+		G.cry_force_use = nil
 	end
 	return results
 end
@@ -1366,7 +1319,7 @@ function Cryptid.forcetriggerConsumableCheck(card)
 	end
 	local banned = {
 		"cry-Exploit",
-		"cry-Merge",
+		--"cry-Merge",
 		"cry-Divide",
 		"cry-Delete",
 		"cry-Pointer",
@@ -1376,5 +1329,5 @@ function Cryptid.forcetriggerConsumableCheck(card)
 			return false
 		end
 	end
-	return true
+	return card.config.center.demicoloncompat or not card.config.center.original_mod
 end

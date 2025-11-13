@@ -39,6 +39,7 @@ function get_pack(_key, _type)
 	end
 	return abc
 end
+
 -- get_currrent_pool hook for Deck of Equilibrium and Copies
 local gcp = get_current_pool
 function get_current_pool(_type, _rarity, _legendary, _append, override_equilibrium_effect)
@@ -60,7 +61,7 @@ function get_current_pool(_type, _rarity, _legendary, _append, override_equilibr
 				pool[i] = "tag_cry_quintuple"
 			end
 		end
-	-- Deck of Equilibrium stuff
+		-- Deck of Equilibrium stuff
 	elseif
 		G.GAME.modifiers.cry_equilibrium
 		and not override_equilibrium_effect
@@ -96,16 +97,37 @@ function get_current_pool(_type, _rarity, _legendary, _append, override_equilibr
 	end
 	return gcp(_type, _rarity, _legendary, _append)
 end
+
 local gnb = get_new_boss
 function get_new_boss()
+	local bl = gnb()
 	--Fix an issue with adding bosses mid-run
 	for k, v in pairs(G.P_BLINDS) do
 		if not G.GAME.bosses_used[k] then
 			G.GAME.bosses_used[k] = 0
 		end
 	end
+	-- Force Clock and Lavender Loop for Rush hour
+	if G.GAME.modifiers.cry_rush_hour then
+		--Check if Clock and Lavender Loop are both enabled
+		if (Cryptid.enabled("bl_cry_clock") == true) and (Cryptid.enabled("bl_cry_lavender_loop") == true) then
+			return (G.GAME.round_resets.ante % G.GAME.win_ante == 0 and G.GAME.round_resets.ante >= 2)
+					and "bl_cry_lavender_loop"
+				or "bl_cry_clock"
+		else
+			-- Note: code elsewhere will force losses until both blinds are enabled
+			return bl
+		end
+	end
+	-- Log
+	if G.GAME.LOG_BOSS then
+		local v = "" .. G.GAME.LOG_BOSS
+		if not G.GAME.USING_LOG then
+			G.GAME.LOG_BOSS = nil
+		end
+		return v
+	end
 	--This is how nostalgic deck replaces the boss blinds with Nostalgic versions
-	local bl = gnb()
 	if G.GAME.modifiers.cry_beta then
 		local bl_key = string.sub(bl, 4)
 		local nostalgicblinds = {
@@ -133,29 +155,51 @@ function G.FUNCS.evaluate_play(e)
 	G.GAME.blind:cry_after_play()
 end
 
---Add context for Just before cards are played
-local pcfh = G.FUNCS.play_cards_from_highlighted
-function G.FUNCS.play_cards_from_highlighted(e)
-	G.GAME.before_play_buffer = true
-	G.GAME.blind:cry_before_play()
-	pcfh(e)
-	G.GAME.before_play_buffer = nil
-end
-
 --Track defeated blinds for Obsidian Orb
 local dft = Blind.defeat
 function Blind:defeat(s)
 	dft(self, s)
 	local obj = self.config.blind
-	-- Ignore blinds with loc_vars because orb does not properly work with them yet
-	if obj.boss and (obj.boss.no_orb or obj.loc_vars) then
+	if
+		(obj.boss and obj.boss.yes_orb)
+		or (
+			obj.name == "The Hook"
+			or obj.name == "The Ox"
+			or obj.name == "The House"
+			or obj.name == "The Wall"
+			or obj.name == "The Wheel"
+			or obj.name == "The Arm"
+			or obj.name == "The Club"
+			or obj.name == "The Fish"
+			or obj.name == "The Psychic"
+			or obj.name == "The Goad"
+			or obj.name == "The Water"
+			or obj.name == "The Window"
+			or obj.name == "The Manacle"
+			or obj.name == "The Eye"
+			or obj.name == "The Mouth"
+			or obj.name == "The Plant"
+			or obj.name == "The Serpent"
+			or obj.name == "The Pillar"
+			or obj.name == "The Needle"
+			or obj.name == "The Head"
+			or obj.name == "The Tooth"
+			or obj.name == "The Flint"
+			or obj.name == "The Mark"
+			or obj.name == "Amber Acorn"
+			or obj.name == "Verdant Leaf"
+			or obj.name == "Violet Vessel"
+			or obj.name == "Crimsion Heart"
+			or obj.name == "Cerulean Bell"
+		)
+	then
+	else
 		return
 	end
 	if
-		self.name ~= "cry-Obsidian Orb"
 		--Stop impossible blind combinations from happening
-		and self.name ~= "The Sink"
-		and (self.name ~= "cry-oldarm" or not G.GAME.defeated_blinds["bl_psychic"])
+		--Needs a better system than this, needs a lovely patch for other mods to add to this list currently (TODO)
+		(self.name ~= "cry-oldarm" or not G.GAME.defeated_blinds["bl_psychic"])
 		and (self.name ~= "The Psychic" or not G.GAME.defeated_blinds["bl_cry_oldarm"])
 		and (self.name ~= "cry-oldarm" or not G.GAME.defeated_blinds["bl_cry_scorch"])
 		and (self.name ~= "cry-scorch" or not G.GAME.defeated_blinds["bl_cry_oldarm"])
@@ -165,8 +209,12 @@ function Blind:defeat(s)
 		and (self.name ~= "cry-Tax" or not G.GAME.defeated_blinds["bl_cry_lavender_loop"])
 		and (self.name ~= "The Needle" or not G.GAME.defeated_blinds["bl_cry_tax"])
 		and (self.name ~= "cry-Tax" or not G.GAME.defeated_blinds["bl_needle"])
+		and (self.name ~= "The Needle" or not G.GAME.defeated_blinds["bl_cry_chromatic"])
+		and (self.name ~= "cry-chromatic" or not G.GAME.defeated_blinds["bl_needle"])
+		and (self.name ~= "cry-Tax" or not G.GAME.defeated_blinds["bl_cry_chromatic"])
+		and (self.name ~= "cry-chromatic" or not G.GAME.defeated_blinds["bl_cry_tax"])
 	then
-		G.GAME.defeated_blinds[self.config.blind.key] = true
+		G.GAME.defeated_blinds[self.config.blind.key or ""] = true
 	end
 end
 
@@ -179,6 +227,8 @@ function Game:start_run(args)
 	if not G.GAME.defeated_blinds then
 		G.GAME.defeated_blinds = {}
 	end
+	G.consumeables.config.highlighted_limit = 1e100
+	G.jokers.config.highlighted_limit = 1e100
 end
 
 --patch for multiple Clocks to tick separately and load separately
@@ -207,6 +257,7 @@ function reset_blinds()
 	end
 	rb()
 end
+
 --Init stuff at the start of the game
 local gigo = Game.init_game_object
 function Game:init_game_object()
@@ -215,9 +266,30 @@ function Game:init_game_object()
 	g.current_round.cry_nb_card = { rank = "Ace" }
 	g.current_round.cry_dropshot_card = { suit = "Spades" }
 	g.monstermult = 1
+	g.neutronstarsusedinthisrun = 0
+	g.sunlevel = 1
+	g.sunnumber = { modest = 0, not_modest = 0 }
+	g.bonus_asc_power = 0
+	g.cry_oboe = 0
+	g.boostertag = 0
 	-- Create G.GAME.events when starting a run, so there's no errors
 	g.events = {}
 	g.jokers_sold = {}
+	g.cry_banished_keys = {}
+	g.cry_last_used_consumeables = {}
+	g.cry_function_stupid_workaround = {}
+
+	-- Added by IcyEthics: Converted the voucher-related modifiers for the tier 3
+	-- acclimator vouchers to be more generically accessible
+	g.cry_bonusvouchercount = 0
+	g.cry_bonusvouchersused = {}
+
+	-- Automatically sets up the cry_percrate for each consumable type and sets it to 100 as a default
+	g.cry_percrate = {}
+	for _, v in ipairs(SMODS.ConsumableType.ctype_buffer) do
+		g.cry_percrate[v:lower()] = 100
+	end
+
 	return g
 end
 
@@ -227,10 +299,7 @@ local rcc = reset_castle_card
 function reset_castle_card()
 	rcc()
 	G.GAME.current_round.cry_nb_card = { rank = "Ace" }
-	if not G.GAME.current_round.cry_dropshot_card then
-		G.GAME.current_round.cry_dropshot_card = {}
-	end
-	G.GAME.current_round.cry_dropshot_card.suit = "Spades"
+	G.GAME.current_round.cry_dropshot_card = { suit = "Spades" }
 	local valid_castle_cards = {}
 	for k, v in ipairs(G.playing_cards) do
 		if not SMODS.has_no_suit(v) and not SMODS.has_enhancement(v, "m_cry_abstract") then
@@ -240,16 +309,10 @@ function reset_castle_card()
 	if valid_castle_cards[1] then
 		--Dropshot
 		local castle_card = pseudorandom_element(valid_castle_cards, pseudoseed("cry_dro" .. G.GAME.round_resets.ante))
-		if not G.GAME.current_round.cry_dropshot_card then
-			G.GAME.current_round.cry_dropshot_card = {}
-		end
 		G.GAME.current_round.cry_dropshot_card.suit = castle_card.base.suit
 		--Number Blocks
 		local castle_card_two =
 			pseudorandom_element(valid_castle_cards, pseudoseed("cry_nb" .. G.GAME.round_resets.ante))
-		if not G.GAME.current_round.cry_nb_card then
-			G.GAME.current_round.cry_nb_card = {}
-		end
 		G.GAME.current_round.cry_nb_card.rank = castle_card_two.base.value
 		G.GAME.current_round.cry_nb_card.id = castle_card_two.base.id
 	end
@@ -293,13 +356,27 @@ Cryptid.C = {
 	SELECTED = { HEX("e38039"), HEX("ccdd1b") },
 	GREENGRADIENT = { HEX("51e099"), HEX("1e523a") },
 	ALTGREENGRADIENT = { HEX("6bb565"), HEX("bd28bf") },
+	TAX_MULT = { HEX("FE5F55"), HEX("40ff40") },
+	TAX_CHIPS = { HEX("009dff"), HEX("40ff40") },
 }
 cry_pointer_dt = 0
 cry_jimball_dt = 0
 cry_glowing_dt = 0
+cry_glowing_dt2 = 0
+local none_eval = 0
 function Game:update(dt)
 	upd(self, dt)
-
+	if not Cryptid.member_count_delay then
+		Cryptid.member_count_delay = 0
+	end
+	if (Cryptid.member_count_delay > 5) or not Cryptid.member_count then -- it doesn't need to update this frequently? but it also doesn't need to be higher tbh...
+		if Cryptid.update_member_count then
+			Cryptid.update_member_count()
+		end -- i honestly hate nil checks like this, wish there was a shorthand
+		Cryptid.member_count_delay = 0
+	else
+		Cryptid.member_count_delay = Cryptid.member_count_delay + dt
+	end
 	--Gradients based on Balatrostuck code
 	local anim_timer = self.TIMERS.REAL * 1.5
 	local p = 0.5 * (math.sin(anim_timer) + 1)
@@ -323,6 +400,7 @@ function Game:update(dt)
 		cry_pointer_dt = cry_pointer_dt + dt
 		cry_jimball_dt = cry_jimball_dt + dt
 		cry_glowing_dt = cry_glowing_dt + dt
+		cry_glowing_dt2 = cry_glowing_dt2 + dt
 	end
 	--Update sprite positions each frame on certain cards to give the illusion of an animated card
 	if G.P_CENTERS and G.P_CENTERS.c_cry_pointer and cry_pointer_dt > 0.5 then
@@ -356,25 +434,32 @@ function Game:update(dt)
 			glowingobj.pos.y = glowingobj.pos.y + 1
 		end
 	end
+	if G.P_CENTERS and G.P_CENTERS.sleeve_cry_glowing_sleeve and cry_glowing_dt2 > 0.1 then
+		cry_glowing_dt2 = 0
+		local glowingobj = G.P_CENTERS.sleeve_cry_glowing_sleeve
+		if glowingobj.pos.x == 1 and glowingobj.pos.y == 4 then
+			glowingobj.pos.x = 0
+			glowingobj.pos.y = 0
+		elseif glowingobj.pos.x < 4 then
+			glowingobj.pos.x = glowingobj.pos.x + 1
+		elseif glowingobj.pos.y < 6 then
+			glowingobj.pos.x = 0
+			glowingobj.pos.y = glowingobj.pos.y + 1
+		end
+	end
 	for k, v in pairs(G.I.CARD) do
 		if v.children.back and v.children.back.atlas.name == "cry_glowing" then
 			v.children.back:set_sprite_pos(G.P_CENTERS.b_cry_glowing.pos or G.P_CENTERS["b_red"].pos)
 		end
 	end
-	if not G.OVERLAY_MENU and not G.CHOOSE_CARD and G.GAME.USING_POINTER then
-		G.CHOOSE_CARD = UIBox({
-			definition = create_UIBox_pointer(card),
-			config = {
-				align = "cm",
-				offset = { x = 0, y = 10 },
-				major = G.ROOM_ATTACH,
-				bond = "Weak",
-				instance_type = "POPUP",
-			},
-		})
-		G.CHOOSE_CARD.alignment.offset.y = 0
-		G.ROOM.jiggle = G.ROOM.jiggle + 1
-		G.CHOOSE_CARD:align_to_major()
+	if not G.OVERLAY_MENU and G.GAME.CODE_DESTROY_CARD and not G.OVERLAY_MENU_POINTER then
+		G.FUNCS.exit_overlay_menu_code()
+	end
+
+	if not G.OVERLAY_MENU then
+		G.GAME.USING_POINTER = nil
+	else
+		G.OVERLAY_MENU_POINTER = nil
 	end
 
 	--Increase the blind size for The Clock and Lavender Loop
@@ -410,9 +495,7 @@ function Game:update(dt)
 				G.GAME.CRY_BLINDS[c] = (G.GAME.CRY_BLINDS[c] or G.P_BLINDS[G.GAME.round_resets.blind_choices[c]].mult)
 					+ (
 						G.P_BLINDS[G.GAME.round_resets.blind_choices[c]].cry_ante_base_mod
-							and G.P_BLINDS[G.GAME.round_resets.blind_choices[c]]:cry_ante_base_mod(
-								dt * (G.GAME.modifiers.cry_rush_hour_iii and 2 or 1)
-							)
+							and G.P_BLINDS[G.GAME.round_resets.blind_choices[c]]:cry_ante_base_mod(dt)
 						or 0
 					)
 				--Update UI
@@ -450,7 +533,7 @@ function Game:update(dt)
 				and to_big(G.GAME.chips) < to_big(G.GAME.blind.chips)
 			then
 				G.GAME.blind.chips = G.GAME.blind.chips
-					+ G.GAME.blind:cry_ante_base_mod(dt * (G.GAME.modifiers.cry_rush_hour_iii and 2 or 1))
+					+ G.GAME.blind:cry_ante_base_mod(dt)
 						* get_blind_amount(G.GAME.round_resets.ante)
 						* G.GAME.starting_params.ante_scaling
 				G.GAME.blind.chip_text = number_format(G.GAME.blind.chips)
@@ -464,13 +547,23 @@ function Game:update(dt)
 			and to_big(G.GAME.chips) < to_big(G.GAME.blind.chips)
 		then
 			G.GAME.blind.chips = G.GAME.blind.chips
-				* (
-					G.GAME.blind.cry_round_base_mod
-						and G.GAME.blind:cry_round_base_mod(dt * (G.GAME.modifiers.cry_rush_hour_iii and 2 or 1))
-					or 1
-				)
+				* (G.GAME.blind.cry_round_base_mod and G.GAME.blind:cry_round_base_mod(dt) or 1)
 			G.GAME.blind.chip_text = number_format(G.GAME.blind.chips)
 		end
+	end
+	if
+		G.STATE == G.STATES.DRAW_TO_HAND
+		and not G.hand.cards[1]
+		and not G.deck.cards[1]
+		and G.PROFILES[G.SETTINGS.profile].cry_none
+	then
+		G.STATE = G.STATES.SELECTING_HAND
+		G.STATE_COMPLETE = false
+	end
+	if G.STATE == G.STATES.NEW_ROUND or G.STATE == G.STATES.HAND_PLAYED then
+		none_eval = none_eval + dt
+	else
+		none_eval = 0
 	end
 end
 
@@ -478,7 +571,6 @@ end
 local sc = Card.set_cost
 function Card:set_cost()
 	-- Makes the edition cost increase usually present not apply if this variable is true
-	-- Used for some of the Jen's almanac edition decks because having the price increase apply was "unfun"
 	if self.edition and G.GAME.modifiers.cry_no_edition_price then
 		local m = Cryptid.deep_copy(self.edition)
 		self.edition = nil
@@ -498,25 +590,48 @@ function Card:set_cost()
 	if self.ability.name == "cry-Big Cube" then
 		self.cost = 27
 	end
+	--Make Tarots free if Tarot Acclimator is redeemed
+	--Make Planets free if Planet Acclimator is redeemed
+	if self.ability.set == "Tarot" and G.GAME.used_vouchers.v_cry_tacclimator then
+		self.cost = 0
+	end
+	if self.ability.set == "Planet" and G.GAME.used_vouchers.v_cry_pacclimator then
+		self.cost = 0
+	end
 
 	--Multiplies voucher cost by G.GAME.modifiers.cry_voucher_price_hike
 	--Used by bronze stake to make vouchers %50 more expensive
 	if self.ability.set == "Voucher" and G.GAME.modifiers.cry_voucher_price_hike then
 		self.cost = math.floor(self.cost * G.GAME.modifiers.cry_voucher_price_hike)
-		--Update related costs
-		self.sell_cost = math.max(1, math.floor(self.cost / 2)) + (self.ability.extra_value or 0)
-		if self.area and self.ability.couponed and (self.area == G.shop_jokers or self.area == G.shop_booster) then
-			self.cost = 0
+	end
+	--Clone Tag
+	for i = 1, #G.GAME.tags do
+		if G.GAME.tags[i].key == "tag_cry_clone" then
+			self.cost = self.cost * 1.5
+			break
 		end
-		self.sell_cost_label = self.facing == "back" and "?" or self.sell_cost
 	end
 
+	--Update related costs
+	self.sell_cost = math.max(1, math.floor(self.cost / 2)) + (self.ability.extra_value or 0)
+	if
+		self.area
+		and self.ability.couponed
+		and (self.area == G.shop_jokers or self.area == G.shop_booster)
+		and self.ability.name ~= "cry-Cube"
+	then
+		self.cost = 0
+	end
 	--Makes Cursed Jokers always sell for $0
 	if self.config and self.config.center and self.config.center.rarity == "cry_cursed" then
 		self.sell_cost = 0
-		self.sell_cost_label = 0
+	--Rotten Egg
+	elseif G.GAME.cry_rotten_amount then
+		self.sell_cost = G.GAME.cry_rotten_amount
 	end
+	self.sell_cost_label = self.facing == "back" and "?" or self.sell_cost
 end
+
 local sell_card_stuff = Card.sell_card
 function Card:sell_card()
 	if self.config.center.set == "Joker" then
@@ -546,7 +661,6 @@ function Card:sell_card()
 			end
 		end
 	end
-	--G.P_CENTERS.j_jolly
 	sell_card_stuff(self)
 end
 
@@ -631,7 +745,7 @@ function SMODS.create_mod_badges(obj, badges)
 			}
 			local function eq_col(x, y)
 				for i = 1, 4 do
-					if x[1] ~= y[1] then
+					if x[i] ~= y[i] then
 						return false
 					end
 				end
@@ -697,7 +811,13 @@ function SMODS.create_mod_badges(obj, badges)
 			}
 		end
 	end
-	if Cryptid.safe_get(G, "ACTIVE_MOD_UI", "id") == "Cryptid" and obj and not obj.force_gameset then
+	local id = obj and obj.mod and obj.mod.id
+	if
+		Cryptid.safe_get(G, "ACTIVE_MOD_UI", "id") == id
+		and obj
+		and not obj.force_gameset
+		and Cryptid.mod_gameset_whitelist[id]
+	then
 		local set = Cryptid.gameset(obj)
 		if set == "disabled" or obj.set == "Content Set" then
 			return
@@ -718,6 +838,14 @@ end
 
 -- This is short enough that I'm fine overriding it
 function calculate_reroll_cost(skip_increment)
+	local limit = G.GAME.reroll_limit_buffer or nil
+	if not limit then
+		if next(find_joker("cry-candybuttons")) then
+			limit = 1
+		elseif G.GAME.used_vouchers.v_cry_rerollexchange then
+			limit = 2
+		end
+	end
 	if not G.GAME.current_round.free_rerolls or G.GAME.current_round.free_rerolls < 0 then
 		G.GAME.current_round.free_rerolls = 0
 	end
@@ -725,14 +853,17 @@ function calculate_reroll_cost(skip_increment)
 		G.GAME.current_round.reroll_cost = 0
 		return
 	end
-	if next(find_joker("cry-candybuttons")) then
-		G.GAME.current_round.reroll_cost = 1
+	if
+		limit
+		and (G.GAME.round_resets.temp_reroll_cost or G.GAME.round_resets.reroll_cost)
+				+ G.GAME.current_round.reroll_cost_increase
+			>= limit
+	then
+		G.GAME.current_round.reroll_cost_increase = 0
+		G.GAME.current_round.reroll_cost = limit
 		return
 	end
-	if G.GAME.used_vouchers.v_cry_rerollexchange then
-		G.GAME.current_round.reroll_cost = 2
-		return
-	end
+
 	G.GAME.current_round.reroll_cost_increase = G.GAME.current_round.reroll_cost_increase or 0
 	if not skip_increment then
 		G.GAME.current_round.reroll_cost_increase = G.GAME.current_round.reroll_cost_increase
@@ -742,7 +873,7 @@ function calculate_reroll_cost(skip_increment)
 		+ G.GAME.current_round.reroll_cost_increase
 end
 
--- We're modifying so much of this for Brown and Yellow Stake, Equilibrium Deck, etc. that it's fine to override...
+local create_card_ref = create_card
 function create_card(_type, area, legendary, _rarity, skip_materialize, soulable, forced_key, key_append)
 	local area = area or G.jokers
 	local pseudo = function(x)
@@ -755,7 +886,6 @@ function create_card(_type, area, legendary, _rarity, skip_materialize, soulable
 		end
 		ps = Cryptid.predict_pseudoseed
 	end
-	local center = G.P_CENTERS.b_red
 	if (_type == "Joker" or _type == "Meme") and G.GAME and G.GAME.modifiers and G.GAME.modifiers.all_rnj then
 		forced_key = "j_cry_rnjoker"
 	end
@@ -780,67 +910,18 @@ function create_card(_type, area, legendary, _rarity, skip_materialize, soulable
 			forced_key = G.P_CENTER_POOLS["Joker"][aeqactive].key
 		end
 	end
-	--should pool be skipped with a forced key
-	if not forced_key and soulable and not G.GAME.banned_keys["c_soul"] then
-		for _, v in ipairs(SMODS.Consumable.legendaries) do
-			if
-				(_type == v.type.key or _type == v.soul_set)
-				and not (G.GAME.used_jokers[v.key] and not next(find_joker("Showman")) and not v.can_repeat_soul)
-			then
-				if pseudo("soul_" .. v.key .. _type .. G.GAME.round_resets.ante) > (1 - v.soul_rate) then
-					forced_key = v.key
-				end
-			end
-		end
-		if
-			(_type == "Tarot" or _type == "Spectral" or _type == "Tarot_Planet")
-			and not (G.GAME.used_jokers["c_soul"] and not next(find_joker("Showman")))
-		then
-			if pseudo("soul_" .. _type .. G.GAME.round_resets.ante) > 0.997 then
-				forced_key = "c_soul"
-			end
-		end
-		if
-			(_type == "Planet" or _type == "Spectral")
-			and not (G.GAME.used_jokers["c_black_hole"] and not next(find_joker("Showman")))
-		then
-			if pseudo("soul_" .. _type .. G.GAME.round_resets.ante) > 0.997 then
-				forced_key = "c_black_hole"
-			end
-		end
-	end
-
 	if _type == "Base" then
 		forced_key = "c_base"
 	end
 
-	if forced_key then --vanilla behavior change, mainly for M Joker reasons
-		center = G.P_CENTERS[forced_key]
-		_type = (center.set ~= "Default" and center.set or _type)
-	else
-		gcparea = area
-		local _pool, _pool_key = get_current_pool(_type, _rarity, legendary, key_append)
-		gcparea = nil
-		center = pseudorandom_element(_pool, ps(_pool_key))
-		local it = 1
-		while center == "UNAVAILABLE" do
-			it = it + 1
-			center = pseudorandom_element(_pool, ps(_pool_key .. "_resample" .. it))
-		end
-
-		center = G.P_CENTERS[center]
+	if forced_key and not G.GAME.banned_keys[forced_key] then
+		_type = (G.P_CENTERS[forced_key].set ~= "Default" and G.P_CENTERS[forced_key].set or _type)
 	end
 
-	local front = (
-		(_type == "Base" or _type == "Enhanced")
-		and (
-			pseudorandom_element(G.P_CARDS, ps("front" .. (key_append or "") .. G.GAME.round_resets.ante))
-			or G.P_CARDS["S_T"]
-		)
-	) or nil
+	local front = (SMODS.set_create_card_front and (_type == "Base" or _type == "Enhanced")) or nil
 
 	if area == "ERROR" then
-		local ret = (front or center)
+		local ret = (front or G.P_CENTERS[forced_key] or G.P_CENTERS.b_red)
 		if not ret.config then
 			ret.config = {}
 		end
@@ -856,28 +937,8 @@ function create_card(_type, area, legendary, _rarity, skip_materialize, soulable
 		return ret --the config.center.key stuff prevents a crash with Jen's Almanac hook
 	end
 
-	local card = Card(
-		area and (area.T.x + area.T.w / 2) or 0,
-		area and area.T.y or 0,
-		G.CARD_W * (center and center.set == "Booster" and 1.27 or 1),
-		G.CARD_H * (center and center.set == "Booster" and 1.27 or 1),
-		front,
-		center,
-		{
-			bypass_discovery_center = area == G.shop_jokers
-				or area == G.pack_cards
-				or area == G.shop_vouchers
-				or (G.shop_demo and area == G.shop_demo)
-				or area == G.jokers
-				or area == G.consumeables,
-			bypass_discovery_ui = area == G.shop_jokers
-				or area == G.pack_cards
-				or area == G.shop_vouchers
-				or (G.shop_demo and area == G.shop_demo),
-			discover = area == G.jokers or area == G.consumeables,
-			bypass_back = G.GAME.selected_back.pos,
-		}
-	)
+	local card = create_card_ref(_type, area, legendary, _rarity, skip_materialize, soulable, forced_key, key_append)
+	local center = card and card.config and card.config.center or {}
 	if front and G.GAME.modifiers.cry_force_suit then
 		card:change_suit(G.GAME.modifiers.cry_force_suit)
 	end
@@ -886,22 +947,10 @@ function create_card(_type, area, legendary, _rarity, skip_materialize, soulable
 	end
 	if front and G.GAME.modifiers.cry_force_edition then
 		card:set_edition({ [G.GAME.modifiers.cry_force_edition] = true }, true, true)
+		card:add_to_deck()
 	end
 	if front and G.GAME.modifiers.cry_force_seal then
 		card:set_seal(G.GAME.modifiers.cry_force_seal)
-	end
-	if card.ability.consumeable and not skip_materialize then
-		card:start_materialize()
-	end
-	for k, v in ipairs(SMODS.Sticker.obj_buffer) do
-		local sticker = SMODS.Stickers[v]
-		if
-			sticker.should_apply
-			and type(sticker.should_apply) == "function"
-			and sticker:should_apply(card, center, area)
-		then
-			sticker:apply(card, true)
-		end
 	end
 	if
 		G.GAME.modifiers.cry_force_sticker == "eternal"
@@ -1043,17 +1092,12 @@ function create_card(_type, area, legendary, _rarity, skip_materialize, soulable
 				end
 			end
 			if
-				not card.ability.eternal
+				not SMODS.is_eternal(card)
 				and G.GAME.modifiers.cry_enable_flipped_in_shop
 				and pseudorandom("cry_flip" .. (key_append or "") .. G.GAME.round_resets.ante) > 0.7
 			then
 				card.cry_flipped = true
 			end
-		end
-		if _type == "Joker" and not G.GAME.modifiers.cry_force_edition then
-			local edition = poll_edition("edi" .. (key_append or "") .. G.GAME.round_resets.ante)
-			card:set_edition(edition)
-			check_for_unlock({ type = "have_edition" })
 		end
 	end
 	if (card.ability.set == "Code") and G.GAME.used_vouchers.v_cry_quantum_computing then
@@ -1079,16 +1123,16 @@ function create_card(_type, area, legendary, _rarity, skip_materialize, soulable
 		card:set_edition(edition, true)
 	end
 	if not (card.edition and (card.edition.cry_oversat or card.edition.cry_glitched)) then
-		Cryptid.misprintize(card)
+		Cryptid.manipulate(card)
 	end
 	if card.ability.set == "Joker" and G.GAME.modifiers.cry_common_value_quad then
 		if card.config.center.rarity == 1 then
-			Cryptid.misprintize(card, { min = 4, max = 4 }, nil, true)
+			Cryptid.manipulate(card, { value = 4 })
 		end
 	end
 	if card.ability.set == "Joker" and G.GAME.modifiers.cry_uncommon_value_quad then
 		if card.config.center.rarity == 2 then
-			Cryptid.misprintize(card, { min = 4, max = 4 }, nil, true)
+			Cryptid.manipulate(card, { value = 4 })
 		end
 	end
 	if card.ability.consumeable and card.pinned then -- counterpart is in Sticker.toml
@@ -1123,11 +1167,19 @@ function create_card(_type, area, legendary, _rarity, skip_materialize, soulable
 	return card
 end
 
--- Make tags fit if there's more than 13 of them
--- These two overrides modify the offset to squeeze in more tags when needed
 local at = add_tag
 function add_tag(tag)
 	at(tag)
+	-- Update Costs for Clone Tag
+	if tag.name == "cry-Clone Tag" then
+		for k, v in pairs(G.I.CARD) do
+			if v.set_cost then
+				v:set_cost()
+			end
+		end
+	end
+	-- Make tags fit if there's more than 13 of them
+	-- This + Tag.remove Hook modify the offset to squeeze in more tags when needed
 	if #G.HUD_tags > 13 then
 		for i = 2, #G.HUD_tags do
 			G.HUD_tags[i].config.offset.y = 0.9 - 0.9 * 13 / #G.HUD_tags
@@ -1145,38 +1197,80 @@ function Tag:remove()
 	end
 end
 
---add calculation context and callback to tag function
---used for Energia, etc.
-local at2 = add_tag
-function add_tag(tag, from_skip, no_copy)
-	if no_copy then
-		at2(tag)
-		return
-	end
-	local added_tags = 1
-	local ret = {}
-	SMODS.calculate_context({ cry_add_tag = true }, ret)
-	for i = 1, #ret do
-		if ret[i].jokers then
-			added_tags = added_tags + (ret[i].jokers.tags or 0)
+local nr = new_round
+function new_round()
+	-- I don't remember exactly what this patch was for, perhaps issues with syncing hand size with jokers like Effarcire?
+	G.hand:change_size(0)
+	nr()
+	-- Reset Semicolon
+	G.GAME.current_round.semicolon = false
+	-- Force losses if Rush hour is played with clock and lavender loop disabled
+	if G.GAME.modifiers.cry_rush_hour then
+		if not (Cryptid.enabled("bl_cry_clock") == true) or not (Cryptid.enabled("bl_cry_lavender_loop") == true) then
+			G.E_MANAGER:add_event(Event({
+				func = function()
+					if G.STAGE == G.STAGES.RUN then
+						G.STATE = G.STATES.GAME_OVER
+						G.STATE_COMPLETE = false
+					end
+					print(localize("rush_hour_reminder"))
+					return true
+				end,
+			}))
 		end
-	end
-	if added_tags >= 1 then
-		at2(tag)
-	end
-	for i = 2, added_tags do
-		local ab = copy_table(G.GAME.tags[#G.GAME.tags].ability)
-		local new_tag = Tag(tag.key)
-		at2(new_tag)
-		new_tag.ability = ab
 	end
 end
 
--- I don't remember exactly what this patch was for, perhaps issues with syncing hand size with jokers like Effarcire?
-local nr = new_round
-function new_round()
-	G.hand:change_size(0)
-	nr()
+local stamp_can_play = G.FUNCS.can_play
+G.FUNCS.can_play = function(e)
+	local value = 0
+	-- Allow 0 card hand to always be played if none is unlocked and poker hands aren't disabled
+	if Cryptid.enabled("set_cry_poker_hand_stuff") == true and G.PROFILES[G.SETTINGS.profile].cry_none then
+		value = -1
+	end
+	-- Prevent 1 card hand from being played if Sapphire Stamp is active and poker hands aren't enabled (would result in 0 card hand)
+	if G.GAME.stamp_mod and Cryptid.enabled("set_cry_poker_hand_stuff") ~= true then
+		value = 1
+	end
+
+	if value == 0 then
+		stamp_can_play(e)
+	else
+		if
+			#G.hand.highlighted <= value
+			or G.GAME.blind.block_play
+			or #G.hand.highlighted > math.max(G.GAME.starting_params.play_limit, 1)
+		then
+			e.config.colour = G.C.UI.BACKGROUND_INACTIVE
+			e.config.button = nil
+		else
+			e.config.colour = G.C.BLUE
+			e.config.button = "play_cards_from_highlighted"
+		end
+	end
+end
+local stamp_can_discard = G.FUNCS.can_discard
+G.FUNCS.can_discard = function(e)
+	local value = 0
+	-- Allow 0 card hand to always be discarded if none is unlocked and poker hands aren't disabled
+	if Cryptid.enabled("set_cry_poker_hand_stuff") == true and G.PROFILES[G.SETTINGS.profile].cry_none then
+		value = -1
+	end
+	if value == 0 then
+		stamp_can_discard(e)
+	else
+		if
+			G.GAME.current_round.discards_left <= 0
+			or #G.hand.highlighted <= value
+			or #G.hand.highlighted > math.max(G.GAME.starting_params.discard_limit, 0)
+		then
+			e.config.colour = G.C.UI.BACKGROUND_INACTIVE
+			e.config.button = nil
+		else
+			e.config.colour = G.C.RED
+			e.config.button = "discard_cards_from_highlighted"
+		end
+	end
 end
 
 -- These allow jokers that add joker slots to be obtained even without room, like with Negative Jokers in vanilla
@@ -1266,6 +1360,24 @@ function init_localization()
 			end
 		end
 	end
+
+	for _, group in pairs(G.localization.descriptions) do
+		if
+			_ ~= "Back"
+			and _ ~= "Content Set"
+			and _ ~= "Edition"
+			and _ ~= "Enhanced"
+			and _ ~= "Stake"
+			and _ ~= "Other"
+		then
+			for key, card in pairs(group) do
+				if G.P_CENTERS[key] then
+					Cryptid.pointeraliasify(key, card.name, true)
+				end
+			end
+		end
+	end
+	Cryptid.inject_pointer_aliases()
 end
 
 --Fix a corrupted game state
@@ -1282,6 +1394,7 @@ function Controller:queue_L_cursor_press(x, y)
 	end
 	self.L_cursor_queue = { x = x, y = y }
 end
+
 -- Lemon Trophy's effect
 local trophy_mod_mult = mod_mult
 function mod_mult(_mult)
@@ -1291,6 +1404,7 @@ function mod_mult(_mult)
 	end
 	return trophy_mod_mult(_mult)
 end
+
 -- Fix a CCD-related crash
 local cuc = Card.can_use_consumeable
 function Card:can_use_consumeable(any_state, skip_check)
@@ -1466,6 +1580,143 @@ function Card:shatter(volume)
 	}))
 end
 
+-- Buttercup's store joker mechanic, creates a specified joker
+local ccfs = create_card_for_shop
+function create_card_for_shop(area)
+	local guaranteed_card = Card(
+		area.x,
+		area.y,
+		G.CARD_W,
+		G.CARD_H,
+		nil,
+		G.P_CENTERS.j_jolly,
+		{ bypass_discovery_center = true, bypass_discovery_ui = true }
+	)
+	local areas_to_check = {
+		shop_jokers = G.shop_jokers,
+		shop_vouchers = G.shop_vouchers,
+		shop_booster = G.shop_booster,
+	}
+	local loaded_card_data = nil
+	local loaded_card_pos = -1
+	-- check if there's a card for `area` within `next_shop_cards`,
+	-- then put its data in `loaded_card_data` and its index in the table in `loaded_card_pos`
+	if G.GAME.next_shop_cards and #G.GAME.next_shop_cards > 0 then
+		for i, card in ipairs(G.GAME.next_shop_cards) do
+			if not card.cry_from_shop then
+				card.cry_from_shop = "shop_jokers"
+			end -- failsafe :3
+			if areas_to_check[card.cry_from_shop] == area and loaded_card_pos == -1 then
+				loaded_card_data = card
+				loaded_card_pos = i
+				break
+			elseif areas_to_check[card.cry_from_shop] ~= G.shop_jokers then
+				local other_card = Card(
+					area.x,
+					area.y,
+					G.CARD_W,
+					G.CARD_H,
+					nil,
+					G.P_CENTERS.j_jolly,
+					{ bypass_discovery_center = true, bypass_discovery_ui = true }
+				)
+				other_card:load(card, nil)
+				other_card.VT.h = other_card.T.h
+				table.remove(G.GAME.next_shop_cards, i)
+				create_shop_card_ui(
+					other_card,
+					G.P_CENTERS[card.save_fields.center],
+					set,
+					areas_to_check[card.cry_from_shop]
+				)
+				areas_to_check[card.cry_from_shop]:emplace(other_card)
+				other_card.states.visible = false
+				G.E_MANAGER:add_event(Event({
+					delay = 0.4,
+					trigger = "after",
+					func = function()
+						other_card:start_materialize()
+						other_card:set_cost()
+						return true
+					end,
+				}))
+				other_card:set_cost()
+			end
+		end
+	end
+	if loaded_card_data then
+		-- guaranteed_card.T.h = G.CARD_H
+		guaranteed_card:load(loaded_card_data, nil)
+		guaranteed_card.VT.h = guaranteed_card.T.h
+		table.remove(G.GAME.next_shop_cards, loaded_card_pos)
+		create_shop_card_ui(guaranteed_card, "Joker", area)
+		guaranteed_card.states.visible = false
+		G.E_MANAGER:add_event(Event({
+			delay = 0.4,
+			trigger = "after",
+			func = function()
+				guaranteed_card:start_materialize()
+				guaranteed_card:set_cost()
+				return true
+			end,
+		}))
+		guaranteed_card:set_cost()
+		return guaranteed_card
+	else
+		guaranteed_card:remove()
+	end
+	return ccfs(area)
+end
+
+-- Again, buttercup, making sure you can savescum safely :gjumbsup:
+local carsv = Card.save
+function Card:save()
+	local saved_table = carsv(self)
+	if self.cry_storage then
+		saved_table.cry_storage = self.cry_storage:save()
+	end
+	if self.cry_from_shop then
+		saved_table.cry_from_shop = self.cry_from_shop
+	end
+	return saved_table
+end
+
+local carld = Card.load
+function Card:load(cardTable, other_card)
+	carld(self, cardTable, other_card)
+
+	local storage_area_config = {
+		type = "play",
+		card_w = G.CARD_W,
+	}
+	if cardTable.cry_storage then
+		self.cry_storage = CardArea(self.T.x, 2, 1, 1, storage_area_config)
+		self.cry_storage:load(cardTable.cry_storage)
+		for i, card in ipairs(self.cry_storage.cards) do
+			card.T.orig = { w = card.T.w, h = card.T.h }
+			card.T.w = card.T.w * 0.5
+			card.T.h = card.T.h * 0.5
+		end
+	end
+	if cardTable.cry_from_shop then
+		self.cry_from_shop = cardTable.cry_from_shop
+	end
+end
+
+-- Attach Buttercup's stored cards card area
+local carmv = Card.move
+function Card:move(dt)
+	carmv(self, dt)
+	if self.cry_storage ~= nil and self.cry_storage.cards ~= nil then
+		self.cry_storage.config.card_limit = #self.cry_storage.cards + 1
+		self.cry_storage.T.w = G.CARD_W * 2
+		self.cry_storage.T.x = self.T.x - (G.CARD_W * 0.5)
+		self.cry_storage.T.y = self.T.y
+		self.cry_storage.VT.x = self.VT.x
+		self.cry_storage.VT.y = self.VT.y
+	end
+end
+
 --Hook for booster skip to automatically destroy and banish the rightmost Joker, regardless of eternal
 local banefulSkipPenalty = G.FUNCS.skip_booster
 G.FUNCS.skip_booster = function(e)
@@ -1502,7 +1753,7 @@ G.FUNCS.skip_booster = function(e)
 				for i = #G.jokers.cards, 1, -1 do
 					if
 						not (
-							G.jokers.cards[i].ability.eternal
+							SMODS.is_eternal(G.jokers.cards[i])
 							or G.jokers.cards[i].config.center.rarity == "cry_cursed"
 						)
 					then
@@ -1559,3 +1810,494 @@ G.FUNCS.can_skip_booster = function(e)
 		e.config.button = nil
 	end
 end
+--none stuff
+local set_blindref = Blind.set_blind
+function Blind:set_blind(blind, reset, silent)
+	set_blindref(self, blind, reset, silent)
+	if
+		G.GAME.hands["cry_None"].visible
+		and (G.STATE == G.STATES.SELECTING_HAND or G.STATE == G.STATES.DRAW_TO_HAND)
+		and #G.hand.highlighted == 0
+	then
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			func = function()
+				Cryptid.reset_to_none()
+				return true
+			end,
+		}))
+	end
+end
+
+local end_roundref = end_round
+function end_round()
+	if
+		((#G.hand.cards < 1 and #G.deck.cards < 1 and #G.play.cards < 1) or (#G.hand.cards < 1 and #G.deck.cards < 1))
+		and G.STATE == G.STATES.SELECTING_HAND
+	then
+		if
+			Cryptid.enabled("set_cry_poker_hand_stuff") == true
+			and not Cryptid.safe_get(G.PROFILES, G.SETTINGS.profile, "cry_none")
+		then
+			G.PROFILES[G.SETTINGS.profile].cry_none2 = true
+			G.PROFILES[G.SETTINGS.profile].cry_none = true
+		end
+		if not Cryptid.enabled("set_cry_poker_hand_stuff") then
+			end_roundref()
+		end
+	else
+		end_roundref()
+	end
+	G.E_MANAGER:add_event(Event({
+		trigger = "after",
+		func = function()
+			update_hand_text({ delay = 0 }, { mult = 0, chips = 0, handname = "", level = "" })
+
+			return true
+		end,
+	}))
+end
+
+local after_ref = evaluate_play_after
+function evaluate_play_after(text, disp_text, poker_hands, scoring_hand, non_loc_disp_text, percent, percent_delta)
+	local ret = after_ref(text, disp_text, poker_hands, scoring_hand, non_loc_disp_text, percent, percent_delta)
+	if G.GAME.hands["cry_None"].visible then
+		G.reset_to_none = true
+	end
+	return ret
+end
+local update_handref = Game.update_selecting_hand
+function Game:update_selecting_hand(dt)
+	local ret = update_handref(self, dt)
+	if G.reset_to_none then
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			func = function()
+				Cryptid.reset_to_none()
+
+				return true
+			end,
+		}))
+		G.reset_to_none = nil
+	end
+	return ret
+end
+
+local blind_loadref = Blind.load
+function Blind:load(blindTable)
+	blind_loadref(self, blindTable)
+	if
+		G.GAME.hands["cry_None"].visible
+		and self.blind_set
+		and (G.STATE == G.STATES.SELECTING_HAND or G.STATE == G.STATES.DRAW_TO_HAND)
+	then
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			func = function()
+				Cryptid.reset_to_none()
+				return true
+			end,
+		}))
+	end
+end
+
+local evaluate_ref = G.FUNCS.evaluate_round
+G.FUNCS.evaluate_round = function()
+	evaluate_ref()
+	update_hand_text({ delay = 0 }, { mult = 0, chips = 0, handname = "", level = "" })
+	G.E_MANAGER:add_event(Event({
+		trigger = "after",
+		func = function()
+			update_hand_text({ delay = 0 }, { mult = 0, chips = 0, handname = "", level = "" })
+			return true
+		end,
+	}))
+end
+
+local discard_ref = G.FUNCS.discard_cards_from_highlighted
+G.FUNCS.discard_cards_from_highlighted = function(e, hook)
+	--Labyrinth: set current_round_discards_used to 0 for effects
+	G.GAME.current_round.discards_used2 = G.GAME.current_round.discards_used
+	if next(find_joker("cry-maze")) then
+		G.GAME.current_round.discards_used = 0
+	end
+	discard_ref(e, hook)
+	local highlighted_count = math.min(#G.hand.highlighted, G.discard.config.card_limit - #G.play.cards)
+	if highlighted_count <= 0 then
+		table.sort(G.hand.highlighted, function(a, b)
+			return a.T.x < b.T.x
+		end)
+		check_for_unlock({ type = "discard_custom", cards = {} })
+		for j = 1, #G.jokers.cards do
+			G.jokers.cards[j]:calculate_joker({ pre_discard = true, full_hand = G.hand.highlighted, hook = hook })
+		end
+		if not hook then
+			if G.GAME.modifiers.discard_cost then
+				ease_dollars(-G.GAME.modifiers.discard_cost)
+			end
+			ease_discard(-1)
+			G.GAME.current_round.discards_used = G.GAME.current_round.discards_used + 1
+			G.STATE = G.STATES.DRAW_TO_HAND
+			G.E_MANAGER:add_event(Event({
+				trigger = "immediate",
+				func = function()
+					G.STATE_COMPLETE = false
+					return true
+				end,
+			}))
+		end
+	end
+	if G.GAME.hands["cry_None"].visible then
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			func = function()
+				Cryptid.reset_to_none()
+				return true
+			end,
+		}))
+	end
+	--Labyrinth: return current_round_discards_used back to the amount it is supposed to be after
+	G.GAME.current_round.discards_used = G.GAME.current_round.discards_used2 + 1
+end
+local play_ref = G.FUNCS.play_cards_from_highlighted
+G.FUNCS.play_cards_from_highlighted = function(e)
+	--Labyrinth: set current_round_hands played to 0 for effects
+	G.E_MANAGER:add_event(Event({
+		trigger = "immediate",
+		func = function()
+			G.GAME.current_round.hands_played2 = G.GAME.current_round.hands_played
+			if next(find_joker("cry-maze")) then
+				G.GAME.current_round.hands_played = 0
+			end
+			return true
+		end,
+	}))
+	G.GAME.before_play_buffer = true
+	-- None Stuff
+	if G.GAME.stamp_mod and not G.PROFILES[G.SETTINGS.profile].cry_none and #G.hand.highlighted == 1 then
+		G.PROFILES[G.SETTINGS.profile].cry_none = true
+		G.PROFILES[G.SETTINGS.profile].cry_none2 = true
+		print("nonelock stuff here")
+		G.GAME.hands["cry_None"].visible = true
+	end
+	if G.PROFILES[G.SETTINGS.profile].cry_none and #G.hand.highlighted == 0 then
+		G.GAME.hands["cry_None"].visible = true
+	end
+	--Add blind context for Just before cards are played
+	G.GAME.blind:cry_before_play()
+	play_ref(e)
+	--Labyrinth: return current_round_hands played to the amount it is supposed to be at after
+	G.E_MANAGER:add_event(Event({
+		trigger = "immediate",
+		func = function()
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.1,
+				func = function()
+					G.GAME.current_round.hands_played = G.GAME.current_round.hands_played2 + 1
+					return true
+				end,
+			}))
+			return true
+		end,
+	}))
+	G.GAME.before_play_buffer = nil
+end
+
+local use_cardref = G.FUNCS.use_card
+G.FUNCS.use_card = function(e, mute, nosave)
+	use_cardref(e, mute, nosave)
+	if G.STATE == G.STATES.SELECTING_HAND then
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			func = function()
+				G.hand:parse_highlighted()
+				return true
+			end,
+		}))
+	else
+		update_hand_text({ delay = 0 }, { mult = 0, chips = 0, handname = "", level = "" })
+	end
+end
+local emplace_ref = CardArea.emplace
+function CardArea:emplace(card, location, stay_flipped)
+	return emplace_ref(self, card or {}, location, stay_flipped)
+end
+-- Added by IcyEthics: Adding a hook to the shuffle function so that there can be a context to modify randomization
+-- Any card using this will most likely want to use cry_post_shuffle.
+-- added cry_pre_shuffle for posterity
+local o_ca_shuffle = CardArea.shuffle
+function CardArea:shuffle(_seed)
+	SMODS.calculate_context({ cry_shuffling_area = true, cardarea = self, cry_pre_shuffle = true })
+
+	o_ca_shuffle(self, _seed)
+
+	SMODS.calculate_context({ cry_shuffling_area = true, cardarea = self, cry_post_shuffle = true })
+end
+
+local smods_four_fingers = SMODS.four_fingers
+function SMODS.four_fingers()
+	return smods_four_fingers() - Cryptid.get_paved_joker()
+end
+
+function Cryptid.create_dummy_from_stone(rank)
+	local r = tostring(rank)
+	rank = SMODS.Ranks[r].id
+	return {
+		get_id = function()
+			return rank
+		end,
+		config = {
+			center = {},
+		},
+		ability = {},
+		base = {
+			id = rank,
+			value = rank >= 11 and "Queen" or "10",
+		},
+	}
+end
+function Cryptid.next_ranks(key, start, recurse)
+	key = ({
+		["14"] = "Ace",
+		["13"] = "King",
+		["12"] = "Queen",
+		["11"] = "Jack",
+	})[tostring(key)] or key
+	local rank = SMODS.Ranks[tostring(key)]
+	local ret = {}
+	if not rank or (not start and not wrap and rank.straight_edge) then
+		return ret
+	end
+	for _, v in ipairs(rank.next) do
+		ret[#ret + 1] = v
+		local curr = #ret
+		if recurse and recurse > 0 then
+			for i, v in pairs(Cryptid.next_ranks(ret[#ret], start, recurse - 1)) do
+				ret[#ret + 1] = v
+			end
+		end
+	end
+	return ret
+end
+
+local function append(t, new)
+	local clone = {}
+	for _, item in ipairs(t) do
+		clone[#clone + 1] = item
+	end
+	clone[#clone + 1] = new
+	return clone
+end
+
+function Cryptid.unique_combinations(tbl, sub, min)
+	sub = sub or {}
+	min = min or 1
+	local wrap, yield = coroutine.wrap, coroutine.yield
+	return wrap(function()
+		if #sub > 0 then
+			yield(sub) -- yield short combination.
+		end
+		if #sub < #tbl then
+			for i = min, #tbl do -- iterate over longer combinations.
+				for combo in Cryptid.unique_combinations(tbl, append(sub, tbl[i]), i + 1) do
+					yield(combo)
+				end
+			end
+		end
+	end)
+end
+get_straight_ref = get_straight
+function get_straight(hand, min_length, skip, wrap)
+	local permutations = {}
+	local ranks = {}
+	local cards = {}
+	local stones = Cryptid.get_paved_joker()
+	if stones > 0 then
+		for i, v in pairs(hand) do
+			if v.config.center.key ~= "m_stone" then
+				cards[#cards + 1] = v
+				for i, v in pairs(Cryptid.next_ranks(v:get_id(), nil, stones)) do --this means its inaccurate in some situations like K S S S S but its fine there isnt a better way
+					ranks[v] = true
+				end
+			end
+			if v:get_id() >= 11 then
+				new_ranks = {
+					"Ace",
+					"King",
+					"Queen",
+					"Jack",
+					10,
+				}
+				for i, v in pairs(new_ranks) do
+					ranks[v] = true
+				end
+			end
+		end
+		local rranks = {}
+		for i, v in pairs(ranks) do
+			rranks[#rranks + 1] = i
+		end
+		for i, v in Cryptid.unique_combinations(rranks) do
+			if #i == stones then
+				permutations[#permutations + 1] = i
+			end
+		end
+		for i, v in ipairs(permutations) do
+			local actual = {}
+			local ranks = {}
+			for i, v in pairs(cards) do
+				actual[#actual + 1] = v
+				ranks[v:get_id()] = true
+			end
+			for i, p in pairs(v) do
+				local d = Cryptid.create_dummy_from_stone(p)
+				if not ranks[d:get_id()] then
+					actual[#actual + 1] = d
+				end
+			end
+			local ret = get_straight_ref(actual, min_length + stones, skip, true)
+			if ret and #ret > 0 then
+				return ret
+			end
+		end
+	end
+
+	return get_straight_ref(hand, min_length + stones, skip, wrap)
+end
+
+local get_prob_vars_ref = SMODS.get_probability_vars
+function SMODS.get_probability_vars(trigger_obj, base_numerator, base_denominator, identifier, from_roll, no_mod, ...)
+	local mod = trigger_obj and trigger_obj.ability and trigger_obj.ability.cry_prob or 1
+	local numerator = base_numerator * mod
+	if trigger_obj and trigger_obj.ability and trigger_obj.ability.cry_rigged and not no_mod then
+		numerator = base_denominator
+	end
+	return get_prob_vars_ref(trigger_obj, numerator, base_denominator, identifier, from_roll, no_mod, ...)
+end
+
+local pseudorandom_probability_ref = SMODS.pseudorandom_probability
+function SMODS.pseudorandom_probability(trigger_obj, seed, base_numerator, base_denominator, identifier, no_mod, ...)
+	local mod = trigger_obj and trigger_obj.ability and trigger_obj.ability.cry_prob or 1
+	local numerator = base_numerator * mod
+	if trigger_obj and trigger_obj.ability and trigger_obj.ability.cry_rigged and not no_mod then
+		SMODS.post_prob = SMODS.post_prob or {}
+		SMODS.post_prob[#SMODS.post_prob + 1] = {
+			pseudorandom_result = true,
+			result = true,
+			trigger_obj = trigger_obj,
+			numerator = base_denominator,
+			denominator = base_denominator,
+			identifier = identifier or seed,
+		}
+		return true
+	end
+	return pseudorandom_probability_ref(trigger_obj, seed, numerator, base_denominator, identifier, no_mod, ...)
+end
+
+local is_eternalref = SMODS.is_eternal
+function SMODS.is_eternal(card)
+	if Cryptid.safe_get(card, "ability", "cry_absolute") then
+		return true
+	end
+	return is_eternalref(card)
+end
+
+local unlock_allref = G.FUNCS.unlock_all
+G.FUNCS.unlock_all = function(e)
+	unlock_allref(e)
+	G.PROFILES[G.SETTINGS.profile].cry_none2 = true
+	G.PROFILES[G.SETTINGS.profile].cry_none = (Cryptid.enabled("set_cry_poker_hand_stuff") == true)
+end
+
+local scie = SMODS.calculate_individual_effect
+function SMODS.calculate_individual_effect(effect, scored_card, key, amount, from_edition, ...)
+	local ret = scie(effect, scored_card, key, amount, from_edition, ...)
+	if ret then
+		return ret
+	end
+
+	if key == "cry_broken_swap" and amount > 0 then
+		if effect.card and effect.card ~= scored_card then
+			juice_card(effect.card)
+		end
+		-- only need math.min due to amount being required to be greater than 0
+		amount = math.min(amount, 1)
+
+		local chips = SMODS.Scoring_Parameters.chips
+		local mult = SMODS.Scoring_Parameters.mult
+		local chip_mod = chips.current * amount
+		local mult_mod = mult.current * amount
+
+		chips:modify(mult_mod - chip_mod)
+		mult:modify(chip_mod - mult_mod)
+
+		if not Cryptid.safe_get(Talisman, "config_file", "disable_anims") then
+			G.E_MANAGER:add_event(Event({
+				func = function()
+					-- scored_card:juice_up()
+					local pitch_mod = pseudorandom("cry_broken_sync") * 0.05 + 0.85
+					-- wolf fifth as opposed to plasma deck's just-intonated fifth
+					-- yes i'm putting music theory nerd stuff in here no you cannot stop me
+					play_sound("gong", pitch_mod, 0.3)
+					play_sound("gong", pitch_mod * 1.4814814, 0.2)
+					play_sound("tarot1", 1.5)
+					ease_colour(G.C.UI_CHIPS, mix_colours(G.C.BLUE, G.C.RED, amount))
+					ease_colour(G.C.UI_MULT, mix_colours(G.C.RED, G.C.BLUE, amount))
+					G.E_MANAGER:add_event(Event({
+						trigger = "after",
+						blockable = false,
+						blocking = false,
+						delay = 0.8,
+						func = function()
+							ease_colour(G.C.UI_CHIPS, G.C.BLUE, 0.8)
+							ease_colour(G.C.UI_MULT, G.C.RED, 0.8)
+							return true
+						end,
+					}))
+					G.E_MANAGER:add_event(Event({
+						trigger = "after",
+						blockable = false,
+						blocking = false,
+						no_delete = true,
+						delay = 1.3,
+						func = function()
+							G.C.UI_CHIPS[1], G.C.UI_CHIPS[2], G.C.UI_CHIPS[3], G.C.UI_CHIPS[4] =
+								G.C.BLUE[1], G.C.BLUE[2], G.C.BLUE[3], G.C.BLUE[4]
+							G.C.UI_MULT[1], G.C.UI_MULT[2], G.C.UI_MULT[3], G.C.UI_MULT[4] =
+								G.C.RED[1], G.C.RED[2], G.C.RED[3], G.C.RED[4]
+							return true
+						end,
+					}))
+					return true
+				end,
+			}))
+			if not effect.remove_default_message then
+				if effect.balance_message then
+					card_eval_status_text(
+						effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus,
+						"extra",
+						nil,
+						percent,
+						nil,
+						effect.balance_message
+					)
+				else
+					card_eval_status_text(
+						effect.message_card or effect.juice_card or scored_card or effect.card or effect.focus,
+						"extra",
+						nil,
+						percent,
+						nil,
+						{ message = localize("cry_balanced_q"), colour = { 0.8, 0.45, 0.85, 1 } }
+					)
+				end
+			end
+			delay(0.6)
+		end
+
+		return true
+	end
+end
+
+SMODS.scoring_parameter_keys[#SMODS.scoring_parameter_keys + 1] = "cry_broken_swap"

@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'd37bcdc23ffc6de7322fb5717c96ecd4925da79aa2c57c96868229b4720ab855'
+LOVELY_INTEGRITY = '55b31cd16bfeea20e89eb2997dba478089da4ee9d9831423ca4b5f80ef694ed0'
 
 --Class
 CardArea = Moveable:extend()
@@ -12,13 +12,31 @@ function CardArea:init(X, Y, W, H, config)
     self.states.click.can = false
 
 
-    self.config = config or {}
+    self.config = setmetatable({card_limits = {card_limit}}, {
+        __index = function(t, key)
+            if key == "card_limit" then
+                return t.card_limits.card_limit        
+            end
+        end,
+        __newindex = function(t, key, value)
+            if key == 'card_limit' then
+                t.true_card_limit = t.true_card_limit or 0
+                if not t.no_true_limit then rawset(t, 'true_card_limit', math.max(0, t.true_card_limit + value - (t.card_limits.card_limit or 0))) end
+                rawset(t.card_limits, key, value)
+            else
+                rawset(t, key, value)
+            end
+        end
+    })
+    
+    SMODS.merge_defaults(self.config, config)
     self.card_w = config.card_w or G.CARD_W
     self.cards = {}
     self.children = {}
     self.highlighted = {}
-    self.config.highlighted_limit = config.highlight_limit or G.GAME.modifiers.cry_highlight_limit or 5
+    self.config.highlighted_limit = config.highlight_limit or 5
     self.config.card_limit = config.card_limit or 52
+    self.config.true_card_limit = self.config.card_limit
     self.config.temp_limit = self.config.card_limit
     self.config.card_count = 0
     self.config.type = config.type or 'deck'
@@ -35,10 +53,7 @@ function CardArea:emplace(card, location, stay_flipped)
 if self == G.jokers then
     Cartomancer.handle_joker_added(card)
 end
-    if not card.debuff and card.edition and card.edition.card_limit and (self == G.hand) then
-        self.config.real_card_limit = (self.config.real_card_limit or self.config.card_limit) + card.edition.card_limit
-        self.config.card_limit = math.max(0, self.config.real_card_limit)
-    end
+    self:handle_card_limit(card.ability.card_limit, card.ability.extra_slots_used)
     self.cards = self.cards or {}
     if location == 'front' or self.config.type == 'deck' then 
         table.insert(self.cards, 1, card)
@@ -91,22 +106,23 @@ function CardArea:remove_card(card, discarded_only)
     end
     for i = #self.cards,1,-1 do
         if self.cards[i] == card then
-            if not card.debuff and card.edition and card.edition.card_limit and (self == G.hand) then
-                self.config.real_card_limit = (self.config.real_card_limit or self.config.card_limit) - card.edition.card_limit
-                self.config.card_limit = math.max(0, self.config.real_card_limit)
-            end
             card:remove_from_area()
+            self:handle_card_limit(-1 * (card.ability.card_limit or 0), -1 * (card.ability.extra_slots_used or 0))
             table.remove(self.cards, i)
             self:remove_from_highlighted(card, true)
             break
         end
     end
     self:set_ranks()
-    if self == G.deck then check_for_unlock({type = 'modify_deck', deck = self}) end
+    if not G.in_delete_run and self == G.deck then check_for_unlock({type = 'modify_deck', deck = self}) end
     return card
 end
 
 function CardArea:change_size(delta)
+    if true then
+        self:handle_card_limit(delta)
+        return
+    end
     if delta ~= 0 then 
         G.E_MANAGER:add_event(Event({
             func = function() 
@@ -177,8 +193,23 @@ end
 function CardArea:parse_highlighted()
     G.boss_throw_hand = nil
     local text,disp_text,poker_hands = G.FUNCS.get_poker_hand_info(self.highlighted)
+    local text,disp_text,poker_hands
+    if self == G.hand then
+    	local tbl = {}
+    	for i, v in pairs(G.jokers.cards) do
+    		if v.base.nominal and v.base.suit then
+    			tbl[#tbl+1] = v
+    		end
+    	end
+    	text,disp_text,poker_hands = G.FUNCS.get_poker_hand_info(Cryptid.table_merge(self.highlighted, tbl))
+    else
+    	text,disp_text,poker_hands = G.FUNCS.get_poker_hand_info(self.highlighted)
+    end
     if text == 'NULL' then
         update_hand_text({immediate = true, nopulse = true, delay = 0}, {mult = 0, chips = 0, level = '', handname = ''})
+        for name, parameter in pairs(SMODS.Scoring_Parameters) do
+            update_hand_text({immediate = true, nopulse = true, delay = 0}, {[name] = parameter.default_value})
+        end
     else
         if G.GAME.blind and G.GAME.blind:debuff_hand(self.highlighted, poker_hands, text, true) then
             G.boss_throw_hand = true
@@ -193,7 +224,14 @@ function CardArea:parse_highlighted()
         end
         if backwards then
             update_hand_text({immediate = true, nopulse = nil, delay = 0}, {handname='????', level='?', mult = '?', chips = '?'})
+            for name, parameter in pairs(SMODS.Scoring_Parameters) do
+                update_hand_text({immediate = true, nopulse = nil, delay = 0}, {[name] = '?'})
+            end
         else
+            for name, parameter in pairs(SMODS.Scoring_Parameters) do
+                parameter.current = G.GAME.hands[text][name] or parameter.default_value
+                update_hand_text({immediate = true, nopulse = nil, delay = 0}, {[name] = parameter.current})
+            end
             update_hand_text({immediate = true, nopulse = nil, delay = 0}, {handname=disp_text, level=G.GAME.hands[text].level, mult = Cryptid.ascend(G.GAME.hands[text].mult), chips = Cryptid.ascend(G.GAME.hands[text].chips)})
         end
     end
@@ -260,7 +298,7 @@ function CardArea:update(dt)
         if G.GAME.modifiers.minus_hand_size_per_X_dollar then
             self.config.last_poll_size = self.config.last_poll_size or 0
             if math.floor(G.GAME.dollars/G.GAME.modifiers.minus_hand_size_per_X_dollar) ~= self.config.last_poll_size then
-                 self:change_size(to_big(self.config.last_poll_size - math.floor(G.GAME.dollars/G.GAME.modifiers.minus_hand_size_per_X_dollar)):to_number())
+                 self:change_size(to_number(self.config.last_poll_size - math.floor(G.GAME.dollars/G.GAME.modifiers.minus_hand_size_per_X_dollar)))
                  self.config.last_poll_size = math.floor(G.GAME.dollars/G.GAME.modifiers.minus_hand_size_per_X_dollar)
             end
         end
@@ -277,9 +315,9 @@ function CardArea:update(dt)
     end
     --Check and see if controller is being used
     if G.CONTROLLER.HID.controller and self ~= G.hand then self:unhighlight_all() end
-    if self == G.deck and self.config.card_limit > #G.playing_cards then self.config.card_limit = #G.playing_cards end
+    if self == G.deck and (self.config.card_limit ~= #G.playing_cards or self.config.true_card_limit ~= #G.playing_cards) then self.config.card_limit = #G.playing_cards; self.config.true_card_limit = #G.playing_cards end
     self.config.temp_limit = math.max(#self.cards, self.config.card_limit)
-    self.config.card_count = #self.cards
+    self.config.card_count = self:count_extra_slots_used(self.cards)
 end
 
 function CardArea:draw()
@@ -300,7 +338,7 @@ function CardArea:draw()
                     {n=G.UIT.B, config={w = 0.1,h=0.1}},
                     {n=G.UIT.T, config={ref_table = self.config, ref_value = 'card_count', scale = 0.3, colour = G.C.WHITE}},
                     {n=G.UIT.T, config={text = '/', scale = 0.3, colour = G.C.WHITE}},
-                    {n=G.UIT.T, config={ref_table = self.config, ref_value = 'card_limit', scale = 0.3, colour = G.C.WHITE}},
+                    {n=G.UIT.T, config={ref_table = self.config, ref_value = 'true_card_limit', scale = 0.3, colour = G.C.WHITE}},
                     {n=G.UIT.B, config={w = 0.1,h=0.1}}
                 }} or nil
 
@@ -709,7 +747,23 @@ function CardArea:load(cardAreaTable)
     if self.children then remove_all(self.children) end
     self.children = {}
 
-    self.config = cardAreaTable.config
+    self.config = setmetatable(cardAreaTable.config, {
+        __index = function(t, key)
+            if key == "card_limit" then
+                return t.card_limits.card_limit        
+            end
+        end,
+        __newindex = function(t, key, value)
+            if key == 'card_limit' then
+                t.true_card_limit = t.true_card_limit or 0
+                if not t.no_true_limit then rawset(t, 'true_card_limit', math.max(0, t.true_card_limit + value - (t.card_limits.card_limit or 0))) end
+                rawset(t.card_limits, key, value)
+            else
+                rawset(t, key, value)
+            end
+        end
+    })
+    
 
     for i = 1, #cardAreaTable.cards do
         loading = true

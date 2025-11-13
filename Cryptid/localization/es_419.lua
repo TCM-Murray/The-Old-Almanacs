@@ -52,8 +52,8 @@ return {
 				name = "Baraja crítica",
 				text = {
 					"Después de cada mano jugada,",
-					"{C:green}#1# en 4{} probabilidades para {X:dark_edition,C:white} ^2 {} multi",
-					"{C:green}#1# en 8{} probabilidades para {X:dark_edition,C:white} ^0.5 {} multi",
+					"{C:green}#1# en #2#{} probabilidades para {X:dark_edition,C:white} ^2 {} multi",
+					"{C:green}#1# en #3#{} probabilidades para {X:dark_edition,C:white} ^0.5 {} multi",
 				},
 			},
 			b_cry_encoded = {
@@ -136,7 +136,7 @@ return {
 				name = "Baraja legendaria",
 				text = {
 					"Comienza con un comodín {C:legendary}legendario{C:legendary}",
-					"{C:green}1 en 5{} probabilidades para crear otro",
+					"{C:green}#1# en #2#{} probabilidades para crear otro",
 					"cuando se derrota a la ciega jefe",
 					"{C:inactive}(debe haber espacio){}",
 				},
@@ -1427,7 +1427,7 @@ return {
 					"{C:attention}primer descarte{} de cada ronda",
 				},
 			},
-			j_cry_Megg = {
+			j_cry_megg = {
 				name = "Muevo",
 				text = {
 					"Vende esta carta para crear",
@@ -1449,7 +1449,7 @@ return {
 					"{X:mult,C:white}X#1#{} multi por cada miembro",
 					"en el {C:attention}Discord de Cryptid{}",
 					"{C:inactive}(Actual: {X:mult,C:white}X#2#{C:inactive} multi)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_membershipcardtwo = {
@@ -1458,7 +1458,7 @@ return {
 					"{C:chips}+#1#{} fichas por cada miembro",
 					"en el {C:attention}Discord de Cryptid{}",
 					"{C:inactive}(Actual: {C:chips}+#2#{C:inactive} fichas)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_meteor = {
@@ -2406,6 +2406,14 @@ return {
 					"gana {C:attention}2{} vales aleatorios",
 				},
 			},
+			c_cry_meld = {
+				name = "Fusionar",
+				text = {
+					"Selecciona un {C:attention}comodín{} o",
+					"{C:attention}carta de juego{} para",
+					"hacerla {C:dark_edition}Doble cara",
+				},
+			},
 			c_cry_typhoon = {
 				name = "Tifón",
 				text = {
@@ -2848,14 +2856,7 @@ return {
 					"una {C:attention}Carta de eco",
 				},
 			},
-			c_cry_meld = {
-				name = "Fusionar",
-				text = {
-					"Selecciona un {C:attention}comodín{} o",
-					"{C:attention}carta de juego{} para",
-					"hacerla {C:dark_edition}Doble cara",
-				},
-			},
+
 			c_cry_theblessing = {
 				name = "La bendición",
 				text = {
@@ -3084,6 +3085,15 @@ return {
 			},
 		},
 		Other = {
+			alt_wheel_of_fortune = {
+				name = "La rueda de la fortuna",
+				text = {
+					"{C:green}#1# en #2#{} probabilidades de agregar",
+					"que sean {C:dark_edition}laminadas{}, {C:dark_edition}holográficas{} o",
+					"{C:dark_edition}polícromas{}",
+					"a un {C:attention}comodín al azar",
+				},
+			},
 			banana = {
 				name = "Banana",
 				text = {
@@ -3563,6 +3573,7 @@ return {
 			cry_debuff_obsidian_orb = "Aplica las habilidades de todos los jefes derrotados",
 
 			k_code = "Código",
+			k_chips = "fichas",
 			k_unique = "Único",
 			b_code_cards = "Cartas de código",
 			b_unique_cards = "Cartas únicas",

@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'ea380375abea86eefbbea37c0f321b6fd28291364be4164ebec939d6b44e2b57'
+LOVELY_INTEGRITY = '0c9f384602810c84efcb8abeb7880ed150a95147a9c814bb1661e8e801aadd7b'
 
 local pointer = {
 	cry_credits = {
@@ -31,25 +31,128 @@ local pointer = {
 		return true
 	end,
 	use = function(self, card, area, copier)
+		if not card.ability.cry_multiuse or to_big(card.ability.cry_multiuse) <= to_big(1) then
+			G.GAME.CODE_DESTROY_CARD = copy_card(card)
+			G.consumeables:emplace(G.GAME.CODE_DESTROY_CARD)
+		else
+			card.ability.cry_multiuse = card.ability.cry_multiuse + 1
+		end
 		G.GAME.USING_CODE = true
-		G.GAME.USING_POINTER = true
-		G.ENTERED_CARD = ""
-		G.CHOOSE_CARD = UIBox({
-			definition = create_UIBox_pointer(card),
-			config = {
-				align = "cm",
-				offset = { x = 0, y = 10 },
-				major = G.ROOM_ATTACH,
-				bond = "Weak",
-				instance_type = "POPUP",
-			},
-		})
-		G.CHOOSE_CARD.alignment.offset.y = 0
-		G.ROOM.jiggle = G.ROOM.jiggle + 1
-		G.CHOOSE_CARD:align_to_major()
-		check_for_unlock({ cry_used_consumable = "c_cry_pointer" })
+		G.OVERLAY_MENU_POINTER = true
+		G.E_MANAGER:add_event(Event({
+			func = function()
+				G.GAME.USING_POINTER = true
+				G.FUNCS.overlay_menu({ definition = create_UIBox_your_collection() })
+				return true
+			end,
+		}))
+		G.E_MANAGER:add_event(Event({
+			func = function()
+				check_for_unlock({ cry_used_consumable = "c_cry_pointer" })
+				return true
+			end,
+		}))
+		G.GAME.POINTER_SUBMENU = nil
 	end,
 	init = function(self)
+		local ccl = Card.click
+		function Card:click()
+			if G.GAME.USING_POINTER then
+				if not self.debuff then
+					if self.config.center.consumeable then
+						local copy = copy_card(self)
+						copy:add_to_deck()
+						G.consumeables:emplace(copy)
+						G.FUNCS.exit_overlay_menu_code()
+						ccl(self)
+					elseif self.config.center.set == "Booster" then
+						G.FUNCS.exit_overlay_menu_code()
+						local card = copy_card(self)
+						card.cost = 0
+						card.from_tag = true
+						G.FUNCS.use_card({ config = { ref_table = card } })
+						card:start_materialize()
+						created = true
+						ccl(self)
+					elseif
+						self.config.center.key == "c_base"
+						or self.config.center.set == "Enhanced"
+						or self.edition
+						or G.GAME.POINTER_SUBMENU == "Edition"
+					then
+						--submenu stuff
+						if G.GAME.POINTER_SUBMENU == "Rank" then
+							G.GAME.POINTER_PLAYING.rank = self.base.value
+							G.FUNCS.overlay_menu({
+								definition = create_UIBox_pointer_suit(),
+							})
+						elseif G.GAME.POINTER_SUBMENU == "Suit" then
+							G.GAME.POINTER_PLAYING.suit = self.base.suit
+							G.FUNCS.overlay_menu({
+								definition = create_UIBox_pointer_enhancement(),
+							})
+						elseif G.GAME.POINTER_SUBMENU == "Enhancement" then
+							G.GAME.POINTER_PLAYING.center = self.config.center.key
+							G.FUNCS.overlay_menu({
+								definition = create_UIBox_pointer_edition(),
+							})
+						elseif G.GAME.POINTER_SUBMENU == "Edition" then
+							if self.edition then
+								G.GAME.POINTER_PLAYING.edition = self.edition.key
+							end
+							G.FUNCS.overlay_menu({
+								definition = create_UIBox_pointer_seal(),
+							})
+						elseif G.GAME.POINTER_SUBMENU == "Seal" then
+							G.GAME.POINTER_PLAYING.seal = self.seal
+							local card = SMODS.create_card({
+								key = G.GAME.POINTER_PLAYING.center,
+								rank = G.GAME.POINTER_PLAYING.rank,
+								suit = G.GAME.POINTER_PLAYING.suit,
+							})
+							card:set_ability(G.P_CENTERS[G.GAME.POINTER_PLAYING.center])
+							if G.GAME.POINTER_PLAYING.seal then
+								card:set_seal(G.GAME.POINTER_PLAYING.seal)
+							end
+							if G.GAME.POINTER_PLAYING.edition then
+								card:set_edition(G.GAME.POINTER_PLAYING.edition)
+							end
+							if G.STATE == G.STATES.SELECTING_HAND then
+								G.hand:emplace(card)
+							else
+								G.deck:emplace(card)
+							end
+							table.insert(G.playing_cards, card)
+							G.FUNCS.exit_overlay_menu_code()
+							G.GAME.POINTER_PLAYING = nil
+						end
+					else
+						G.ENTERED_CARD = self.config.center.key
+						local ret = G.FUNCS.pointer_apply()
+						G.FUNCS.pointer_cancel()
+						if ret then
+							G.FUNCS.exit_overlay_menu_code()
+							ccl(self)
+						else
+							G.GAME.USING_CODE = true
+							G.GAME.USING_POINTER = true
+						end
+					end
+				end
+			else
+				ccl(self)
+			end
+		end
+		local emplace_ref = CardArea.emplace
+		function CardArea:emplace(card, ...)
+			if G.GAME.USING_POINTER then
+				if Cryptid.pointergetblist(card.config.center.key)[1] then
+					card.debuff = true
+				end
+			end
+			return emplace_ref(self, card, ...)
+		end
+
 		function create_UIBox_pointer(card)
 			G.E_MANAGER:add_event(Event({
 				blockable = false,
@@ -137,7 +240,9 @@ local pointer = {
 			return t
 		end
 		G.FUNCS.pointer_cancel = function()
-			G.CHOOSE_CARD:remove()
+			if G.CHOOSE_CARD then
+				G.CHOOSE_CARD:remove()
+			end
 			G.GAME.USING_CODE = false
 			G.GAME.USING_POINTER = false
 			G.DEBUG_POINTER = false
@@ -165,7 +270,7 @@ local pointer = {
 			local entered_card = G.ENTERED_CARD
 			local valid_check = {}
 			G.PREVIOUS_ENTERED_CARD = G.ENTERED_CARD
-			current_card = Cryptid.pointergetalias(apply_lower(entered_card)) or nil
+			current_card = Cryptid.pointergetalias(entered_card) or nil
 			valid_check = Cryptid.pointergetblist(current_card)
 			if not valid_check[3] then
 				current_card = nil
@@ -252,26 +357,38 @@ local pointer = {
 					created = true
 				end
 				if created then
-					G.CHOOSE_CARD:remove()
+					if G.CHOOSE_CARD then
+						G.CHOOSE_CARD:remove()
+					end
 					G.GAME.USING_CODE = false
 					G.GAME.USING_POINTER = false
 					G.DEBUG_POINTER = false
-					return
+					return true
 				end
 			end
 
 			for i, v in pairs(G.P_TAGS) do -- TAGS
-				if Cryptid.pointergetalias(i) and not Cryptid.pointergetblist(i) then
+				local blacklist = Cryptid.pointergetblist(i)
+				-- gonna be real w/ you idk why pointergetblist is a table now so im just gonna check if everything in it is falsey
+				local can_spawn = true
+				for _, val in pairs(blacklist) do
+					can_spawn = can_spawn and not val
+				end
+
+				if Cryptid.pointergetalias(i) and can_spawn then
 					if v.name and apply_lower(entered_card) == apply_lower(v.name) then
 						current_card = i
+						break --no clue why this wasn't done before, you can't create 2 tags with one pointer
 					end
 					if apply_lower(entered_card) == apply_lower(i) then
 						current_card = i
+						break
 					end
 					if
 						apply_lower(entered_card) == apply_lower(localize({ type = "name_text", set = v.set, key = i }))
 					then
 						current_card = i
+						break
 					end
 				end
 			end
@@ -384,6 +501,7 @@ local pointer = {
 					G.GAME.USING_CODE = false
 					G.GAME.USING_POINTER = false
 					G.DEBUG_POINTER = false
+					return true
 				end
 			end
 			if not current_card then -- if card isn't created yet, try playing cards
@@ -635,6 +753,7 @@ local pointer = {
 						end,
 					}))
 					draw_card(G.play, G.deck, 90, "up", nil)
+					return true
 				end
 			end
 		end
@@ -716,6 +835,7 @@ local aliases = {
 	},
 	j_stencil = {
 		"Joker Stencil",
+		"Stencil",
 	},
 	j_four_fingers = {
 		"Four Fingers",
@@ -728,6 +848,7 @@ local aliases = {
 	},
 	j_credit_card = {
 		"Credit Card",
+		"Debit Card",
 	},
 	j_ceremonial = {
 		"Ceremonial Dagger",
@@ -760,6 +881,7 @@ local aliases = {
 	},
 	j_raised_fist = {
 		"Raised Fist",
+		"1984",
 	},
 	j_chaos = {
 		"Chaos the Clown",
@@ -985,6 +1107,7 @@ local aliases = {
 	},
 	j_baseball = {
 		"Baseball Card",
+		"Baseball Huh?",
 	},
 	j_bull = {
 		"Bull",
@@ -1086,10 +1209,12 @@ local aliases = {
 	},
 	j_blueprint = {
 		"Blueprint",
+		"BP",
 	},
 	j_wee = {
 		"Wee Joker",
 		"WEEEE",
+		"Wee",
 	},
 	j_merry_andy = {
 		"Merry Andy",
@@ -1195,6 +1320,7 @@ local aliases = {
 	c_empress = {
 		"The Empress",
 		"Empress",
+		"Mult Tarot",
 	},
 	c_emperor = {
 		"The Emperor",
@@ -1205,21 +1331,26 @@ local aliases = {
 		"Hierophant",
 		"The Heirophant",
 		"Heirophant",
+		"Bonus Tarot",
 	},
 	c_lovers = {
 		"The Lovers",
 		"Lovers",
+		"Wild Tarot",
 	},
 	c_chariot = {
 		"The Chariot",
 		"Chariot",
+		"Steel Tarot",
 	},
 	c_justice = {
 		"Justice",
+		"Glass Tarot",
 	},
 	c_hermit = {
 		"The Hermit",
 		"Hermit",
+		"Doubles Money",
 	},
 	c_wheel_of_fortune = {
 		"The Wheel Of Fortune",
@@ -1244,33 +1375,44 @@ local aliases = {
 	},
 	c_temperance = {
 		"Temperance",
+		"The Temperance",
+		"Joker Money",
 	},
 	c_devil = {
 		"The Devil",
 		"Devil",
+		"Gold Tarot",
 	},
 	c_tower = {
 		"The Tower",
 		"Tower",
+		"Stone Tarot",
 	},
 	c_star = {
 		"The Star",
 		"Star",
+		"Diamond Tarot",
 	},
 	c_moon = {
 		"The Moon",
 		"Moon",
+		"Club Tarot",
 	},
 	c_sun = {
 		"The Sun",
 		"Sun",
+		"Heart Tarot",
 	},
 	c_judgement = {
 		"Judgement",
+		"The Judgement",
+		"Judgement Day",
+		"Minos Prime",
 	},
 	c_world = {
 		"The World",
 		"World",
+		"Spade Tarot",
 	},
 
 	-- Vanilla Planets
@@ -1646,11 +1788,6 @@ local aliases = {
 		"Jumbo Spectral",
 		"Spectral Incantation",
 		"Jumbo Spectral Pack",
-	},
-	p_spectral_mega_1 = {
-		"Mega Spectral",
-		"Spectral Ectoplasm",
-		"Mega Spectral Pack",
 	},
 	p_spectral_mega_1 = {
 		"Mega Spectral",
@@ -2361,7 +2498,152 @@ local aliases = {
 	-- placeholder in a placeholder in a placeholder in a holdplacer in a placeholder
 
 	-- Cryptid Tags
-	-- meow
+	tag_cry_astral = {
+		"Astral Tag",
+		"Astral",
+		"Free Astral",
+	},
+	tag_cry_banana = {
+		"Banana Tag",
+	},
+	tag_cry_bettertop_up = {
+		"Better Top-Up Tag",
+		"Better Top-Up",
+		"Better Top Up Tag",
+		"Better Top Up",
+		"Uncommon Top Up",
+	},
+	tag_cry_better_voucher = {
+		"Tier 3 tag",
+		"Tier 3 voucher tag",
+		"Golden Voucher",
+		"Golden Voucher Tag",
+		"Better Voucher Tag",
+	},
+	tag_cry_blur = {
+		"Blurred Tag",
+		"Blurred",
+		"Free Blurred",
+	},
+	tag_cry_booster = {
+		"Booster Tag",
+		"Double Booster Tag",
+		"Double Booster",
+	},
+	tag_cry_bundle = {
+		"Bundle Tag",
+		"Bundle",
+	},
+	tag_cry_cat = {
+		"Cat Tag",
+		"meow",
+		"mrow",
+		"mrrp",
+		"purr",
+	},
+	tag_cry_console = {
+		"Console Tag",
+		"Console",
+		"Code Tag",
+	},
+	tag_cry_double_m = {
+		"Double M",
+		"Double M Tag",
+		"Jolly M",
+	},
+	tag_cry_empowered = {
+		"Empowered Tag",
+		"Better Spectral",
+		"Better Spectral Tag",
+	},
+	tag_cry_epic = {
+		"Epic Tag",
+		"Half-price Epic Joker",
+		"Half price Epic Joker",
+		"Half price Epic",
+		"Half-price Epic",
+	},
+	tag_cry_gambler = {
+		"Gambler Tag",
+		"Gambling Tag",
+		"Gambling",
+		"Gambler's Tag",
+		"LETS GO GAMBLING!",
+	},
+	tag_cry_glass = {
+		"Fragile Tag",
+		"Fragile",
+		"Glass Tag",
+		"Free Fragile",
+	},
+	tag_cry_glitched = {
+		"Glitched Tag",
+		"Glitched",
+		"Free Glitched",
+	},
+	tag_cry_gold = {
+		"Gold Tag",
+		"Golden Tag",
+		"Gold",
+		"Free Golden",
+	},
+	tag_cry_gourmand = {
+		"Gourmand",
+		"Gourmand Tag",
+		"Free Food",
+	},
+	tag_cry_loss = {
+		"Loss",
+		"Loss Tag",
+		"Meme Tag",
+		"Meme Pack Tag",
+	},
+	tag_cry_m = {
+		"M Tag",
+		"Jolly Tag",
+		"Jolly",
+		"Free Jolly",
+	},
+	tag_cry_memory = {
+		"Memory Tag",
+		"Memory",
+	},
+	tag_cry_mosaic = {
+		"Mosaic",
+		"Mosaic Tag",
+		"Free Mosaic",
+	},
+	tag_cry_oversat = {
+		"Oversat",
+		"Free Oversat",
+		"Oversaturated",
+		"Free Oversaturated",
+		"Oversaturated Tag",
+	},
+	tag_cry_quadruple = {
+		"Quadruple",
+		"Quadruple Tag",
+	},
+	tag_cry_quintuple = {
+		"Quintuple",
+		"Quintuple Tag",
+	},
+	tag_cry_rework = {
+		"Rework Tag",
+	},
+	tag_cry_schematic = {
+		"Schematic",
+		"Schematic Tag",
+		"Guaranteed Brainstorm",
+	},
+	tag_cry_scope = {
+		"Scope Tag",
+		"Scope",
+	},
+	tag_cry_triple = {
+		"Triple",
+		"Triple Tag",
+	},
 
 	-- Cryptid Vouchers
 	-- placeholder (T1 T2 T1 T2 pattern)
@@ -2369,7 +2651,7 @@ local aliases = {
 	-- Cryptid T3 Vouchers
 	-- super strong placeholder
 
-	--[[ 
+	--[[
 	Format:
 		<joker key> = {
 			"<alias1>",
@@ -2408,12 +2690,37 @@ return {
 	name = "Pointer://",
 	items = pointeritems,
 	init = function()
-		print("[CRYPTID] Inserting Pointer Aliases")
-		local alify = Cryptid.pointeraliasify
-		 
-		for key, aliasesTable in pairs(aliases) do
-			for _, alias in pairs(aliasesTable) do
-				alify(key, alias, nil)
+		function Cryptid.inject_pointer_aliases()
+			--print("[CRYPTID] Inserting Pointer Aliases")
+			local alify = Cryptid.pointeraliasify
+			 
+			for key, aliasesTable in pairs(aliases) do
+				for _, alias in pairs(aliasesTable) do
+					alify(key, alias, nil)
+				end
+				alify(key, key, nil)
+			end
+			for _, group in pairs(G.localization.descriptions) do
+				if
+					_ ~= "Back"
+					and _ ~= "Content Set"
+					and _ ~= "Edition"
+					and _ ~= "Enhanced"
+					and _ ~= "Stake"
+					and _ ~= "Other"
+				then
+					for key, card in pairs(group) do
+						if G.P_CENTERS[key] then
+							alify(key, type(card.name) == "table" and card.name[1] or card.name, nil)
+							if G.P_CENTERS[key].name then
+								alify(key, G.P_CENTERS[key].name, nil)
+							end
+							if G.P_CENTERS[key].original_key then
+								alify(key, G.P_CENTERS[key].original_key, nil)
+							end
+						end
+					end
+				end
 			end
 		end
 	end,

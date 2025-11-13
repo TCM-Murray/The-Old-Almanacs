@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '0b1c92b1cf017cdd7f69f647457d0aa9e351e1306b5810987b3995f28b54739e'
+LOVELY_INTEGRITY = '64943664f9764e2ccbd9b69ed482f6718cf3f34c822ecc4b8852e41edf2dc2fc'
 
 -- gameset.lua: functions for gameset UI and logic
 
@@ -352,6 +352,8 @@ G.FUNCS.cry_gameset_confirm = function(e)
 		if G.selectedGameset == "madness" then
 			--Unlock All by default in madness
 			G.PROFILES[G.SETTINGS.profile].all_unlocked = true
+			G.PROFILES[G.SETTINGS.profile].cry_none2 = true
+			G.PROFILES[G.SETTINGS.profile].cry_none = (Cryptid.enabled("set_cry_poker_hand_stuff") == true)
 			for k, v in pairs(G.P_CENTERS) do
 				if not v.demo and not v.wip then
 					v.alerted = true
@@ -584,7 +586,9 @@ function Cryptid.gameset(card, center)
 		if center.tag and center.tag.key then --dumb fix for tags
 			center = center.tag
 		else
-			print("Could not find key for center: " .. tprint(center))
+			if false then
+				print("Could not find key for center: " .. tprint(center))
+			end
 			return G.PROFILES[G.SETTINGS.profile].cry_gameset or "mainline"
 		end
 	end
@@ -616,6 +620,11 @@ local csa = Card.set_ability
 function Card:set_ability(center, y, z)
 	if not center then
 		return
+	end
+	-- Addition by IcyEthics to make compatible with strings used on set_ability. Copied directly from the smods set_ability implementation
+	if type(center) == "string" then
+		assert(G.P_CENTERS[center], ('Could not find center "%s"'):format(center))
+		center = G.P_CENTERS[center]
 	end
 	if not center.config then
 		center.config = {} --crashproofing
@@ -1139,10 +1148,21 @@ function Cryptid.update_obj_registry(m, force_enable)
 				if en == true then
 					if v.cry_disabled then
 						v:enable()
+						if v.key == "set_cry_poker_hand_stuff" then
+							G.PROFILES[G.SETTINGS.profile].cry_none = Cryptid.safe_get(
+								G.PROFILES,
+								G.SETTINGS.profile,
+								"cry_none2"
+							) and true or nil
+						end
 					end
 				else
 					if not v.cry_disabled then
 						v:_disable(en)
+						if v.key == "set_cry_poker_hand_stuff" and G.PROFILES[G.SETTINGS.profile].cry_none then
+							--Remove the none flag if poker hands are disabled because leaving it on can leave to softlocks
+							G.PROFILES[G.SETTINGS.profile].cry_none = nil
+						end
 					end
 				end
 			end

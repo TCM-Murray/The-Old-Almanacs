@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '7a91cb2f74766d88dcfaef971207c386f2243b12e58e7036797d818a7875e9e3'
+LOVELY_INTEGRITY = 'fe1d0c4935bfeb0f91e48fc0d8ad540ed7066cafa841968751e9cf1979272e4c'
 
 --Class
 Game = Object:extend()
@@ -221,17 +221,8 @@ function Game:start_up()
     Trance_set_globals(self, 0);print(tprint(G.C.SPLASH))
     initSteamodded()
 
-    for i = 1, #G.CHALLENGES do
-        if (G.CHALLENGES[i].id == 'c_cry_rush_hour' or G.CHALLENGES[i].id == 'c_cry_rush_hour_ii' or G.CHALLENGES[i].id == 'c_cry_rush_hour_iii') and #G.CHALLENGES[i].restrictions.banned_other == 0 then
-            for k, v in pairs(G.P_BLINDS) do
-                if k ~= "bl_cry_clock" and k ~= "bl_cry_lavender_loop" and v.boss then
-                    G.CHALLENGES[i].restrictions.banned_other[#G.CHALLENGES[i].restrictions.banned_other+1] = {id = k, type = 'blind'}
-                end
-            end
-        end
-    end
     set_profile_progress()
-    Cartomancer.load_mod_file('internal/localization.lua', 'localization')
+    Cartomancer.load_mod_file('internal/localization.lua', 'cartomancer.localization')
     Blueprint.load_mod_file('internal/localization.lua', 'internal.localization')
     boot_timer('prep stage', 'splash prep',1)
     self:splash_screen()
@@ -1191,6 +1182,8 @@ function Game:init_window(reset)
 end
 
 function Game:delete_run()
+    G.in_delete_run = true
+    booster_obj = nil
     if self.ROOM then
         remove_all(G.STAGE_OBJECTS[G.STAGE])
         self.load_shop_booster = nil
@@ -1237,6 +1230,7 @@ function Game:delete_run()
     if G.GAME then G.GAME.won = false end
 
     G.STATE = -1
+    G.in_delete_run = false
 end
 
 
@@ -1762,15 +1756,6 @@ function Game:main_menu(change_context) --True if main menu is accessed from the
         blockable = false,
         func = function()
             set_discover_tallies()
-            for i = 1, #G.CHALLENGES do
-                if (G.CHALLENGES[i].id == 'c_cry_rush_hour' or G.CHALLENGES[i].id == 'c_cry_rush_hour_ii' or G.CHALLENGES[i].id == 'c_cry_rush_hour_iii') and #G.CHALLENGES[i].restrictions.banned_other == 0 then
-                    for k, v in pairs(G.P_BLINDS) do
-                        if k ~= "bl_cry_clock" and k ~= "bl_cry_lavender_loop" and v.boss then
-                            G.CHALLENGES[i].restrictions.banned_other[#G.CHALLENGES[i].restrictions.banned_other+1] = {id = k, type = 'blind'}
-                        end
-                    end
-                end
-            end
             set_profile_progress()
             G.REFRESH_ALERTS = true
         return true
@@ -1992,12 +1977,6 @@ function Game:init_game_object()
         pseudorandom = {},
         starting_deck_size = 52,
         ecto_minus = 1,
-        cry_bonusvouchercount = 0,
-        cry_bonusvouchersused = {},
-        cry_percrate = {tarot = 100, planet = 100},
-        cry_banished_keys = {},
-        cry_last_used_consumeables = {},
-        cry_function_stupid_workaround = {},
         pack_size = 2,
         skips = 0,
         STOP_USE = 0,
@@ -2125,6 +2104,7 @@ function Game:start_run(args)
     args = args or {}
 
     local saveTable = args.savetext or nil
+    if G.SAVED_GAME then SMODS.save_game = G.SAVED_GAME.GAME.smods_version else SMODS.save_game = nil end
     G.SAVED_GAME = nil
 
     self:prep_stage(G.STAGES.RUN, saveTable and saveTable.STATE or G.STATES.BLIND_SELECT)
@@ -2145,10 +2125,14 @@ function Game:start_run(args)
     self.GAME = saveTable and saveTable.GAME or self:init_game_object()
     if Talisman and Talisman.igo then self.GAME = Talisman.igo(self.GAME) end
     Handy.UI.init()
+    SMODS.update_hand_limit_text(true, true)
     self.GAME.modifiers = self.GAME.modifiers or {}
     self.GAME.stake = args.stake or self.GAME.stake or 1
     self.GAME.STOP_USE = 0
     self.GAME.selected_back = Back(selected_back)
+    if saveTable then
+        self.GAME.selected_back:load(saveTable.BACK)
+    end
     self.GAME.selected_back_key = selected_back
     
     if not saveTable then
@@ -2157,6 +2141,14 @@ function Game:start_run(args)
     end
     for k, v in pairs(self.GAME.pseudorandom) do if v == 0 then self.GAME.pseudorandom[k] = pseudohash(k..self.GAME.pseudorandom.seed) end end
     self.GAME.pseudorandom.hashed_seed = pseudohash(self.GAME.pseudorandom.seed)
+    
+    if saveTable then
+        self.GAME.current_scoring_calculation = SMODS.Scoring_Calculations[saveTable.SCORING_CALC.key]:load({
+            config = saveTable.SCORING_CALC.config
+        })
+    else
+        self.GAME.current_scoring_calculation = SMODS.Scoring_Calculations['multiply']:new()
+    end
 
     G.C.UI_CHIPS = copy_table(G.C.CHIPS)
     G.C.UI_MULT = copy_table(G.C.MULT)
@@ -2181,6 +2173,9 @@ function Game:start_run(args)
             self.GAME.challenge = args.challenge.id
             self.GAME.challenge_tab = args.challenge
             local _ch = args.challenge
+            if _ch.apply and type(_ch.apply) == "function" then
+                _ch:apply()
+            end
             if _ch.jokers then
                 for k, v in ipairs(_ch.jokers) do
                     G.E_MANAGER:add_event(Event({
@@ -2248,6 +2243,9 @@ function Game:start_run(args)
             end
             if _ch.restrictions then
                 if _ch.restrictions.banned_cards then
+                   if type(_ch.restrictions.banned_cards) == 'function' then
+                        _ch.restrictions.banned_cards = _ch.restrictions.banned_cards()
+                	end
                     for k, v in ipairs(_ch.restrictions.banned_cards) do
                         G.GAME.banned_keys[v.id] = true
                         if v.ids then
@@ -2258,11 +2256,18 @@ function Game:start_run(args)
                     end
                 end
                 if _ch.restrictions.banned_tags then
+                    if type(_ch.restrictions.banned_tags) == 'function' then
+                        _ch.restrictions.banned_tags = _ch.restrictions.banned_tags()
+                    end
                     for k, v in ipairs(_ch.restrictions.banned_tags) do
                         G.GAME.banned_keys[v.id] = true
                     end
                 end
                 if _ch.restrictions.banned_other then
+                   
+                    if type(_ch.restrictions.banned_other) == 'function' then
+                        _ch.restrictions.banned_other = _ch.restrictions.banned_other()
+                    end
                     for k, v in ipairs(_ch.restrictions.banned_other) do
                         G.GAME.banned_keys[v.id] = true
                     end
@@ -2320,6 +2325,14 @@ function Game:start_run(args)
         self.GAME.round_resets.blind_choices.Boss = get_new_boss()
         local forced_voucher = (G.SETTINGS.tutorial_progress or {}).forced_voucher
         self.GAME.current_round.voucher = forced_voucher and {forced_voucher, spawn = {[forced_voucher] = true }} or SMODS.get_next_vouchers()
+        G.GAME.current_round.cry_voucher_stickers = Cryptid.next_voucher_stickers()
+        G.GAME.current_round.cry_voucher_edition = cry_get_next_voucher_edition() or {}
+        for i = 1, self.GAME.cry_bonusvouchercount do
+        	self.GAME.current_round.cry_bonusvouchers[i] = get_next_voucher_key()
+        end
+        if self.GAME.modifiers.cry_no_vouchers then
+            very_fair_quip = pseudorandom_element(G.localization.misc.very_fair_quips, pseudoseed("cry_very_fair"))
+        end
         self.GAME.round_resets.blind_tags.Small = G.SETTINGS.tutorial_progress and G.SETTINGS.tutorial_progress.forced_tags and G.SETTINGS.tutorial_progress.forced_tags[1] or get_next_tag_key()
         self.GAME.round_resets.blind_tags.Big = G.SETTINGS.tutorial_progress and G.SETTINGS.tutorial_progress.forced_tags and G.SETTINGS.tutorial_progress.forced_tags[2] or get_next_tag_key()
     else
@@ -2381,13 +2394,13 @@ function Game:start_run(args)
         0, 0,
         CAI.consumeable_W,
         CAI.consumeable_H, 
-        {card_limit = self.GAME.starting_params.consumable_slots, type = 'joker', highlight_limit = 1e100})
+        {card_limit = self.GAME.starting_params.consumable_slots, type = 'joker', highlight_limit = 1, negative_info = 'consumable'})
 
     self.jokers = CardArea(
         0, 0,
         CAI.joker_W,
         CAI.joker_H, 
-        {card_limit = self.GAME.starting_params.joker_slots, type = 'joker', highlight_limit = 1e100})
+        {card_limit = self.GAME.starting_params.joker_slots, type = 'joker', highlight_limit = 1, negative_info = 'joker'})
 
     else
     self.jokers = CardArea(
@@ -2413,7 +2426,7 @@ function Game:start_run(args)
     self.hand = CardArea(
         0, 0,
         CAI.hand_W,CAI.hand_H, 
-        {card_limit = self.GAME.starting_params.hand_size, type = 'hand'})
+        {card_limit = self.GAME.starting_params.hand_size, type = 'hand', negative_info = 'playing_card'})
     self.play = CardArea(
         0, 0,
         CAI.play_W,CAI.play_H, 
@@ -2496,8 +2509,8 @@ function Game:start_run(args)
         if not card_protos then 
             card_protos = {}
             for k, v in pairs(self.P_CARDS) do
-                if type(SMODS.Ranks[v.value].in_pool) == 'function' and not SMODS.Ranks[v.value]:in_pool({initial_deck = true, suit = v.suit})
-                or type(SMODS.Suits[v.suit].in_pool) == 'function' and not SMODS.Suits[v.suit]:in_pool({initial_deck = true, rank = v.value}) then
+                if not SMODS.add_to_pool(SMODS.Ranks[v.value], {initial_deck = true, suit = v.suit})
+                or not SMODS.add_to_pool(SMODS.Suits[v.suit], {initial_deck = true, rank = v.value}) then
                     goto continue
                 end
                 local _ = nil
@@ -2539,7 +2552,7 @@ function Game:start_run(args)
 
         if G.GAME.modifiers.cry_ccd then
             for k, v in pairs(G.playing_cards) do
-                v:set_ability(Cryptid.random_consumable('cry_ccd',{"no_doe", "no_grc"}, nil, nil, true), true, nil)
+                v:set_ability(Cryptid.random_consumable('cry_ccd', nil, nil, nil, true), true, nil)
             end
         end
         self.GAME.starting_deck_size = #G.playing_cards
@@ -2612,7 +2625,7 @@ function Game:start_run(args)
         for k, v in ipairs(tags) do
             local _tag = Tag('tag_uncommon')
             _tag:load(v)
-            add_tag(_tag, nil, true)
+            add_tag(_tag)
         end
     else
         G.GAME.blind:set_blind(nil, nil, true)
@@ -2691,26 +2704,6 @@ function Game:update(dt)
         self.C.DARK_EDITION[1] = 0.6+0.2*math.sin(self.TIMERS.REAL*1.3)
         self.C.DARK_EDITION[3] = 0.6+0.2*(1- math.sin(self.TIMERS.REAL*1.3))
         self.C.DARK_EDITION[2] = math.min(self.C.DARK_EDITION[3], self.C.DARK_EDITION[1])
-        	local njy_red = self.C.RED
-        	local njy_green = self.C[G.njy_colour]
-        	if self.GAME and self.GAME.chips and self.GAME.blind and self.GAME.blind.chips then
-        		if not to_big then
-        			function to_big(x) return x end
-        		end
-        		if to_big(self.GAME.chips) >= to_big(self.GAME.blind.chips) then
-        			self.C.CHIPS_REQUIRED[1] = njy_green[1]
-        			self.C.CHIPS_REQUIRED[2] = njy_green[2]
-        			self.C.CHIPS_REQUIRED[3] = njy_green[3]
-        		else
-        			self.C.CHIPS_REQUIRED[1] = njy_red[1]
-        			self.C.CHIPS_REQUIRED[2] = njy_red[2]
-        			self.C.CHIPS_REQUIRED[3] = njy_red[3]
-        		end
-        	else
-        		self.C.CHIPS_REQUIRED[1] = njy_red[1]
-        		self.C.CHIPS_REQUIRED[2] = njy_red[2]
-        		self.C.CHIPS_REQUIRED[3] = njy_red[3]
-        	end
 
         self.C.EDITION[1] = 0.7+0.2*(1+math.sin(self.TIMERS.REAL*1.5 + 0))
         self.C.EDITION[3] = 0.7+0.2*(1+math.sin(self.TIMERS.REAL*1.5 + 3))
@@ -2719,7 +2712,7 @@ function Game:update(dt)
             if v.gradient and type(v.gradient) == "function" then v:gradient(dt) end
         end
         for _,v in pairs(SMODS.Gradients) do
-           v:update(dt) 
+           v:update(dt)
         end
 
         
@@ -2742,7 +2735,7 @@ function Game:update(dt)
                             {n=G.UIT.O, config={object = DynaText({scale = 0.7, string = localize('ph_unscored_hand'), maxw = 9, colours = {G.C.WHITE},float = true, shadow = true, silent = true, pop_in = 0, pop_in_rate = 6})}},
                         }},
                         {n=G.UIT.R, config = {align = 'cm', maxw = 1}, nodes={
-                            {n=G.UIT.O, config={object = DynaText({scale = 0.6, string = SMODS.debuff_text or G.GAME.blind:get_loc_debuff_text(), maxw = 9, colours = {G.C.WHITE},float = true, shadow = true, silent = true, pop_in = 0, pop_in_rate = 6})}},
+                            {n=G.UIT.O, config={func = "update_blind_debuff_text", object = DynaText({scale = 0.6, string = SMODS.debuff_text or G.GAME.blind:get_loc_debuff_text(), maxw = 9, colours = {G.C.WHITE},float = true, shadow = true, silent = true, pop_in = 0, pop_in_rate = 6})}},
                         }}
                     }}, 
                     config = {
@@ -2787,10 +2780,10 @@ function Game:update(dt)
         	end
         end
         if self.STATE == self.STATES.SELECTING_HAND then
-            if (not G.hand.cards[1]) and G.deck.cards[1] then 
-                G.STATE = G.STATES.DRAW_TO_HAND
-                G.STATE_COMPLETE = false
-            else
+                        if (not G.hand.cards[1]) and G.deck.cards[1] and G.hand.config.card_limit > 0 then 
+                            G.STATE = G.STATES.DRAW_TO_HAND
+                            G.STATE_COMPLETE = false
+                        else
                 self:update_selecting_hand(dt)
             end
         end
@@ -2824,12 +2817,7 @@ function Game:update(dt)
         end
 
         if G.STATE == G.STATES.SMODS_BOOSTER_OPENED then
-            if not SMODS.OPENED_BOOSTER then
-            	G.STATE = G.STATES.SHOP
-            	print('Error: SMODS.OPENED_BOOSTER is nil. Game recovered by setting game state to shop.')
-            else
-            	SMODS.OPENED_BOOSTER.config.center:update_pack(dt)
-            end
+            SMODS.OPENED_BOOSTER.config.center:update_pack(dt)
         end
         
         if self.STATE == self.STATES.TAROT_PACK then
@@ -2883,7 +2871,7 @@ function Game:update(dt)
                     timer_checkpoint('move', 'update')
         
         for k, v in pairs(self.MOVEABLES) do
-            v:update(dt*self.SPEEDFACTOR)
+            v:update(dt*self.SPEEDFACTOR, self.real_dt)
             v.states.collide.is = false
         end
                     timer_checkpoint('update', 'update')
@@ -2937,13 +2925,6 @@ function Game:update(dt)
     end
     
     --Save every 10 seconds, unless forced or paused/unpaused
-    if not Cryptid.member_count_delay then Cryptid.member_count_delay = 0 end
-    if (Cryptid.member_count_delay > 5) or not Cryptid.member_count then	-- it doesn't need to update this frequently? but it also doesn't need to be higher tbh...
-    	if Cryptid.update_member_count then Cryptid.update_member_count() end	-- i honestly hate nil checks like this, wish there was a shorthand
-    	Cryptid.member_count_delay = 0
-    else
-    	Cryptid.member_count_delay = Cryptid.member_count_delay + dt
-    end
     if G.FILE_HANDLER and G.FILE_HANDLER and G.FILE_HANDLER.update_queued and (
         G.FILE_HANDLER.force or 
         G.FILE_HANDLER.last_sent_stage ~= G.STAGE or
@@ -3326,24 +3307,21 @@ function Game:update_selecting_hand(dt)
     if not self.buttons and not self.deck_preview then
         self.buttons = UIBox{
             definition = create_UIBox_buttons(),
-            config = {align="bm", offset = {x=0.65,y=0.3},major = G.hand, bond = 'Weak'}
+            config = {align="bm", offset = {x=0,y=0.3},major = G.hand, bond = 'Weak'}
         }
     end
     if self.buttons and not self.buttons.states.visible and not self.deck_preview then
         self.buttons.states.visible = true
     end
 
-    if not true then
+    if #G.hand.cards < 1 and #G.deck.cards < 1 and #G.play.cards < 1 and not G.PROFILES[G.SETTINGS.profile].cry_none then
         end_round()
     end
 
     if self.shop and not G.GAME.USING_CODE then self.shop:remove(); self.shop = nil end
     if not G.STATE_COMPLETE then
         G.STATE_COMPLETE = true
-        if #G.hand.cards < 1 and #G.deck.cards < 1 then
-        	G.FUNCS.njy_attempt_endround()
-        end
-        if not true then
+        if #G.hand.cards < 1 and #G.deck.cards < 1 and not G.PROFILES[G.SETTINGS.profile].cry_none then
             end_round()
         else
             save_run()
@@ -3428,7 +3406,7 @@ function Game:update_shop(dt)
                                         end
                                         if add then
                                             local card = create_card('Joker', G.jokers, true, nil, nil, nil, nil, 'cry_antique')
-                                            Cryptid.misprintize(card)
+                                            Cryptid.manipulate(card)
                                             card.misprint_cost_fac = 50/card.cost
                                             card:set_cost()
                                             create_shop_card_ui(card, 'Voucher', G.shop_vouchers)
@@ -3456,7 +3434,9 @@ function Game:update_shop(dt)
                                             if G.GAME.current_round.used_packs[i] ~= 'USED' then 
                                                 local card = Card(G.shop_booster.T.x + G.shop_booster.T.w/2,
                                                 G.shop_booster.T.y, G.CARD_W*(G.P_CENTERS[G.GAME.current_round.used_packs[i]].set == 'Booster' and 1.27 or 1), G.CARD_H*(G.P_CENTERS[G.GAME.current_round.used_packs[i]].set == 'Booster' and 1.27 or 1), G.P_CARDS.empty, G.P_CENTERS[G.GAME.current_round.used_packs[i]], {bypass_discovery_center = true, bypass_discovery_ui = true})
-                                                Cryptid.misprintize(card)
+                                                if G.GAME.modifiers.cry_misprint_min then
+                                                    Cryptid.manipulate(card)
+                                                end
                                                 if G.GAME.modifiers.cry_enable_flipped_in_shop and pseudorandom('cry_flip_pack'..G.GAME.round_resets.ante) > 0.7 then
                                                     card.cry_flipped = true
                                                 end
@@ -3523,11 +3503,7 @@ G.GAME.blind.chips = (G.GAME.blind.chips or math.huge)
         G.E_MANAGER:add_event(Event({
             trigger = 'immediate',
             func = function()
-        if not to_big then
-        	function to_big(x) return x end
-        end
-        if (G.GAME.current_round.hands_left <= 0 and to_big(self.GAME.chips) < to_big(self.GAME.blind.chips)) or (GLOBAL_njy_vanilla_override and to_big(self.GAME.chips) >= to_big(self.GAME.blind.chips)) then
-        	stop_use()
+        if to_big(G.GAME.chips) >= to_big(G.GAME.blind.chips) or G.GAME.current_round.hands_left < 1 then
             G.STATE = G.STATES.NEW_ROUND
         else
             G.STATE = G.STATES.DRAW_TO_HAND
@@ -3942,13 +3918,16 @@ function Game:update_game_over(dt)
                 blocking = false,
                 func = (function()
                     if G.OVERLAY_MENU and G.OVERLAY_MENU:get_UIE_by_ID('jimbo_spot') then 
-                        Jimbo = Card_Character({x = 0, y = 5})
+                        local quip, extra = SMODS.quip("loss")
+                        extra.x = 0
+                        extra.y = 5
+                        Jimbo = Card_Character(extra)
                         local spot = G.OVERLAY_MENU:get_UIE_by_ID('jimbo_spot')
                         spot.config.object:remove()
                         spot.config.object = Jimbo
                         Jimbo.ui_object_updated = true
-                        Jimbo:add_speech_bubble('lq_'..math.random(1,10), nil, {quip = true})
-                        Jimbo:say_stuff(5)
+                        Jimbo:add_speech_bubble(quip, nil, {quip = true}, extra)
+                        Jimbo:say_stuff((extra and extra.times) or 5, false, quip)
                         end
                     return true
                 end)

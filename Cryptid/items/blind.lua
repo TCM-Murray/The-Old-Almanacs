@@ -11,6 +11,7 @@ local oldox = {
 	boss = {
 		min = 2,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 4,
@@ -36,6 +37,7 @@ local oldhouse = {
 	boss = {
 		min = 3,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 5,
@@ -64,6 +66,7 @@ local oldarm = {
 	boss = {
 		min = 3,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 6,
@@ -92,6 +95,7 @@ local oldfish = {
 	boss = {
 		min = 2,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 7,
@@ -117,6 +121,7 @@ local oldmanacle = {
 	boss = {
 		min = 1,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 8,
@@ -142,6 +147,7 @@ local oldserpent = {
 	boss = {
 		min = 5,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 9,
@@ -167,6 +173,7 @@ local oldpillar = {
 	boss = {
 		min = 3,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 10,
@@ -195,6 +202,7 @@ local oldflint = {
 	boss = {
 		min = 3,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 11,
@@ -223,6 +231,7 @@ local oldmark = {
 	boss = {
 		min = 4,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "nostalgia",
 	order = 12,
@@ -251,12 +260,13 @@ local tax = {
 	boss = {
 		min = 2,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 2,
 	boss_colour = HEX("40ff40"),
 	loc_vars = function(self, info_queue, card)
-		return { vars = { 0.4 * get_blind_amount(G.GAME.round_resets.ante) * 2 * G.GAME.starting_params.ante_scaling } } -- no bignum?
+		return { vars = { 0.4 * get_blind_amount(G.GAME.round_resets.ante) * 2 * G.GAME.starting_params.ante_scaling } }
 	end,
 	preview_ui = function(self)
 		local value = self:loc_vars().vars[1]
@@ -283,8 +293,14 @@ local tax = {
 	collection_loc_vars = function(self)
 		return { vars = { localize("cry_tax_placeholder") } }
 	end,
-	cry_cap_score = function(self, score)
-		return math.floor(math.min(0.4 * G.GAME.blind.chips, score) + 0.5)
+	set_blind = function(self, reset, silent)
+		SMODS.set_scoring_calculation("cry_tax")
+	end,
+	defeat = function(self, silent)
+		SMODS.set_scoring_calculation("multiply")
+	end,
+	disable = function(self, silent)
+		SMODS.set_scoring_calculation("multiply")
 	end,
 	in_pool = function()
 		return G.GAME.round_resets.hands >= 3
@@ -303,6 +319,7 @@ local box = {
 	boss = {
 		min = 1,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 13,
@@ -327,8 +344,9 @@ local clock = {
 	pos = { x = 0, y = 1 },
 	mult = 0,
 	boss = {
-		min = 1,
+		min = 2,
 		max = 10,
+		yes_orb = true,
 	},
 	config = {
 		tw_bl = {
@@ -351,7 +369,7 @@ local clock = {
 		elseif G.GAME.round == 0 and G.GAME.skips == 0 then
 			return 0
 		else
-			return 0.1 * (dt * math.min(G.SETTINGS.GAMESPEED, 4) / 4) / 3
+			return 0.1 * ((dt * (G.GAME.modifiers.cry_rush_hour_iii or 1)) * math.min(G.SETTINGS.GAMESPEED, 4) / 4) / 3
 		end
 	end,
 }
@@ -368,6 +386,7 @@ local trick = {
 	boss = {
 		min = 1,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 14,
@@ -428,14 +447,15 @@ local joke = {
 	collection_loc_vars = function(self)
 		return { vars = { "8", localize("cry_joke_placeholder") } }
 	end,
-	cry_calc_ante_gain = function(self)
-		if to_big(G.GAME.chips) > to_big(G.GAME.blind.chips) * 2 then
-			if G.GAME.round_resets.ante == 1 then
-				G.GAME.cry_ach_conditions.the_jokes_on_you_triggered = true
+	calculate = function(self, blind, context)
+		if context.modify_ante and context.ante_end and not blind.disabled then
+			if to_big(G.GAME.chips) > to_big(G.GAME.blind.chips) * 2 then
+				if G.GAME.round_resets.ante == 1 then
+					G.GAME.cry_ach_conditions.the_jokes_on_you_triggered = true
+				end
+				return { modify = G.GAME.win_ante - G.GAME.round_resets.ante % G.GAME.win_ante }
 			end
-			return G.GAME.win_ante - G.GAME.round_resets.ante % G.GAME.win_ante
 		end
-		return 1
 	end,
 }
 local hammer = {
@@ -451,6 +471,7 @@ local hammer = {
 	boss = {
 		min = 2,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 19,
@@ -487,6 +508,7 @@ local magic = {
 	boss = {
 		min = 2,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 20,
@@ -523,6 +545,7 @@ local windmill = {
 	boss = {
 		min = 4,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 16,
@@ -547,6 +570,7 @@ local striker = {
 	boss = {
 		min = 4,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 1,
@@ -571,6 +595,7 @@ local shackle = {
 	boss = {
 		min = 1,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 18,
@@ -579,7 +604,7 @@ local shackle = {
 		if G.GAME.modifiers.cry_force_edition and G.GAME.modifiers.cry_force_edition == "negative" then
 			return false
 		end
-		return #Cryptid.advanced_find_joker(nil, nil, "e_negative", nil, true) ~= 0
+		return #Cryptid.advanced_find_joker(nil, nil, "e_negative", nil, true, "j") ~= 0
 	end,
 	recalc_debuff = function(self, card, from_blind)
 		if
@@ -605,6 +630,7 @@ local pin = {
 	boss = {
 		min = 4,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 17,
@@ -624,6 +650,7 @@ local pin = {
 				card.config.center.rarity == 4
 				or card.config.center.rarity == "cry_epic"
 				or card.config.center.rarity == "cry_exotic"
+				or Cryptid.pin_debuff[card.config.center.rarity]
 			)
 		then
 			return true
@@ -647,6 +674,7 @@ local scorch = {
 	boss = {
 		min = 1,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 21,
@@ -662,11 +690,11 @@ local scorch = {
 			and (context.cardarea == G.play or context.cardarea == "unscored")
 			and not G.GAME.blind.disabled
 		then
-			return { remove = not context.destroy_card.ability.eternal }
+			return { remove = not SMODS.is_eternal(context.destroying_card) }
 		end
 		if context.discard and not G.GAME.blind.disabled then
 			for i, card in ipairs(G.hand.highlighted) do
-				return { remove = not card.ability.eternal }
+				return { remove = not SMODS.is_eternal(card) }
 			end
 		end
 	end,
@@ -698,6 +726,7 @@ local greed = {
 	boss = {
 		min = 1,
 		max = 10,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 22,
@@ -720,22 +749,24 @@ local greed = {
 		}
 	end,
 	set_blind = function(self, reset, silent)
-		if to_big(G.GAME.dollars) < to_big(5000) then
-			G.GAME.blind.chips = -- go my equations
-				((get_blind_amount(G.GAME.round_resets.ante) * G.GAME.starting_params.ante_scaling) + (math.floor(
-					G.GAME.dollars / 5
-				) * (get_blind_amount(G.GAME.round_resets.ante) * 0.25)))
-		else
-			G.GAME.blind.chips = -- set cap at $5000
-				(
-					(get_blind_amount(G.GAME.round_resets.ante) * G.GAME.starting_params.ante_scaling)
-					+ (
-						math.floor(5000 / 5) -- 1000 extra increments
-						* (get_blind_amount(G.GAME.round_resets.ante) * 0.25)
+		if to_big(G.GAME.dollars) > to_big(0) then
+			if to_big(G.GAME.dollars) < to_big(5000) then
+				G.GAME.blind.chips = -- go my equations
+					((get_blind_amount(G.GAME.round_resets.ante) * G.GAME.starting_params.ante_scaling) + (math.floor(
+						G.GAME.dollars / 5
+					) * (get_blind_amount(G.GAME.round_resets.ante) * 0.25)))
+			else
+				G.GAME.blind.chips = -- set cap at $5000
+					(
+						(get_blind_amount(G.GAME.round_resets.ante) * G.GAME.starting_params.ante_scaling)
+						+ (
+							math.floor(5000 / 5) -- 1000 extra increments
+							* (get_blind_amount(G.GAME.round_resets.ante) * 0.25)
+						)
 					)
-				)
+			end
+			G.GAME.blind.chip_text = number_format(G.GAME.blind.chips)
 		end
-		G.GAME.blind.chip_text = number_format(G.GAME.blind.chips)
 	end,
 	disable = function(self, silent)
 		G.GAME.blind.chips = get_blind_amount(G.GAME.round_resets.ante) * G.GAME.starting_params.ante_scaling
@@ -763,9 +794,10 @@ local decision = {
 	boss = {
 		min = 4,
 		max = 666666,
+		yes_orb = true,
 	},
 	atlas = "blinds",
-	order = 22,
+	order = 23,
 	boss_colour = HEX("474931"),
 	get_loc_debuff_text = function(self)
 		return localize("cry_blind_baneful_pack")
@@ -831,6 +863,143 @@ local decision = {
 		G.GAME.cry_fastened = nil
 	end,
 }
+
+local repulsor = {
+	dependencies = {
+		items = {
+			"set_cry_blind",
+		},
+	},
+	mult = 2,
+	object_type = "Blind",
+	name = "cry-repulsor",
+	key = "repulsor",
+	pos = { x = 0, y = 0 },
+	dollars = 5,
+	boss = {
+		min = 4,
+		max = 666666,
+		yes_orb = true,
+	},
+	atlas = "blinds_two",
+	order = 24,
+	boss_colour = HEX("7c5798"),
+	calculate = function(self, blind, context)
+		if not G.GAME.blind.disabled then
+			if context.before then
+				for i, v in pairs(G.jokers.cards) do
+					if v ~= G.jokers.cards[1] and v ~= G.jokers.cards[#G.jokers.cards] then
+						if not v.debuff then
+							G.GAME.blind.triggered = true
+							v.debuff = true
+							v.debuff_from_repulsor = true
+						end
+					end
+				end
+			end
+			if context.retrigger_joker_check and not context.retrigger_joker then
+				if context.other_card == G.jokers.cards[1] or context.other_card == G.jokers.cards[#G.jokers.cards] then
+					return {
+						repetitions = 1,
+					}
+				end
+			end
+			if context.after then
+				for i, v in pairs(G.jokers.cards) do
+					if v.debuff_from_repulsor then
+						v.debuff = nil
+						v.debuff_from_repulsor = true
+					end
+				end
+			end
+		end
+	end,
+}
+
+local chromatic = {
+	dependencies = {
+		items = {
+			"set_cry_blind",
+		},
+	},
+	mult = 2,
+	object_type = "Blind",
+	name = "cry-chromatic",
+	key = "chromatic",
+	pos = { x = 0, y = 1 },
+	dollars = 5,
+	boss = {
+		min = 1,
+		max = 666666,
+	},
+	atlas = "blinds_two",
+	order = 25,
+	boss_colour = HEX("a34f98"),
+	set_blind = function(self, reset, silent)
+		G.GAME.chromatic_mod = 0
+		SMODS.set_scoring_calculation("cry_chromatic")
+	end,
+	defeat = function(self, silent)
+		G.GAME.chromatic_mod = nil
+		SMODS.set_scoring_calculation("multiply")
+	end,
+	disable = function(self, silent)
+		G.GAME.chromatic_mod = nil
+		SMODS.set_scoring_calculation("multiply")
+	end,
+	press_play = function(self)
+		if not G.GAME.blind.disabled then
+			G.GAME.blind.prepped = true
+		end
+	end,
+	drawn_to_hand = function(self)
+		if G.GAME.blind.prepped and not G.GAME.blind.disabled then
+			G.GAME.chromatic_mod = G.GAME.chromatic_mod + 1
+		end
+		G.GAME.blind.prepped = nil
+	end,
+}
+
+local landlord = {
+	dependencies = {
+		items = {
+			"set_cry_blind",
+		},
+	},
+	mult = 2,
+	object_type = "Blind",
+	name = "cry-landlord",
+	key = "landlord",
+	pos = { x = 0, y = 2 },
+	dollars = 5,
+	boss = {
+		min = 4,
+		max = 666666,
+		yes_orb = true,
+	},
+	atlas = "blinds_two",
+	order = 26,
+	boss_colour = HEX("c89f13"),
+	debuff_hand = function(self, cards, hand, handname, check)
+		G.GAME.blind.triggered = false
+		local jokers = {}
+		for i, v in pairs(G.jokers.cards) do
+			if not v.ability.rental then
+				jokers[#jokers + 1] = v
+			end
+		end
+		if #jokers > 0 then
+			G.GAME.blind.triggered = true
+			if not check then
+				local joker = pseudorandom_element(jokers, pseudoseed("cry_landlord"))
+				joker:set_rental(true)
+				joker:juice_up()
+				G.GAME.blind:wiggle()
+			end
+		end
+	end,
+}
+
 --It seems Showdown blind order is seperate from normal blind collection order? convenient for me at least
 --Nvm they changed it
 local lavender_loop = {
@@ -850,6 +1019,7 @@ local lavender_loop = {
 		min = 3,
 		max = 10,
 		showdown = true,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 91,
@@ -864,22 +1034,20 @@ local lavender_loop = {
 		G.GAME.cry_ach_conditions.patience_virtue_earnable = nil
 	end,
 	cry_round_base_mod = function(self, dt)
+		local aaa = 4 * (G.GAME.modifiers.cry_rush_hour_iii or 1)
 		if
 			G.GAME.cry_ach_conditions.patience_virtue_timer > 0
 			and G.GAME.cry_ach_conditions.patience_virtue_earnable ~= true
 		then
 			G.GAME.cry_ach_conditions.patience_virtue_timer = G.GAME.cry_ach_conditions.patience_virtue_timer
-				- dt
-					* (G.GAME.modifiers.cry_rush_hour_iii and 0.5 or 1)
-					* (G.SETTINGS.paused and 0 or 1)
-					* G.SETTINGS.GAMESPEED
+				- dt * (G.SETTINGS.paused and 0 or 1) * G.SETTINGS.GAMESPEED
 		elseif G.GAME.current_round.hands_played == 0 then
 			G.GAME.cry_ach_conditions.patience_virtue_earnable = true
 		end
 		if G.SETTINGS.paused or G.STATE == G.STATES.HAND_PLAYED then
 			return 1
 		else
-			return 1.25 ^ (dt / (1.5 / math.min(G.SETTINGS.GAMESPEED, 4) * 4))
+			return 1.25 ^ (dt / (1.5 / math.min(G.SETTINGS.GAMESPEED, 4) * aaa))
 		end
 	end,
 }
@@ -904,7 +1072,7 @@ local tornado = {
 	order = 94,
 	boss_colour = HEX("3dd9ca"),
 	loc_vars = function(self)
-		return { vars = { "" .. ((Cryptid.safe_get(G.GAME, "probabilities", "normal") or 1) * 2), 3 } }
+		return { vars = { SMODS.get_probability_vars(self, 2, 3, "Turquoise Tornado") } }
 	end,
 	set_blind = function(self, reset, silent)
 		if not reset then
@@ -915,12 +1083,12 @@ local tornado = {
 		return #Cryptid.advanced_find_joker("Oops! All 6s", nil, nil, { "eternal" }, nil) == 0
 	end,
 	collection_loc_vars = function(self)
-		return { vars = { "" .. ((Cryptid.safe_get(G.GAME, "probabilities", "normal") or 1) * 2), 3 } }
+		return { vars = { SMODS.get_probability_vars(self, 2, 3, "Turquoise Tornado") } }
 	end,
 	debuff_hand = function(self, cards, hand, handname, check)
 		if
 			not check
-			and (pseudorandom(pseudoseed("tornado")) < ((G.GAME.probabilities.normal * 2) / 3))
+			and SMODS.pseudorandom_probability(self, "tornado", 2, 3, "Turquoise Tornado")
 			and not G.GAME.blind.disabled
 		then
 			--check for guarantee
@@ -953,33 +1121,39 @@ local vermillion_virus = {
 		min = 3,
 		max = 10,
 		showdown = true,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 90,
 	boss_colour = HEX("f65d34"),
 	cry_before_play = function(self)
-		if G.jokers.cards[1] then
-			local idx = pseudorandom(pseudoseed("cry_vermillion_virus"), 1, #G.jokers.cards)
-			if G.jokers.cards[idx] then
-				if G.jokers.cards[idx].config.center.immune_to_vermillion then
-					card_eval_status_text(
-						G.jokers.cards[idx],
-						"extra",
-						nil,
-						nil,
-						nil,
-						{ message = localize("k_nope_ex"), colour = G.C.JOKER_GREY }
-					)
-				else
-					_card = create_card("Joker", G.jokers, nil, nil, nil, nil, nil, "cry_vermillion_virus_gen")
-					G.jokers.cards[idx]:remove_from_deck()
-					_card:add_to_deck()
-					_card:start_materialize()
-					G.jokers.cards[idx] = _card
-					_card:set_card_area(G.jokers)
-					G.jokers:set_ranks()
-					G.jokers:align_cards()
+		local eligible_cards = {}
+		local idx
+		--Check for eligible cards (not eternal and not immune)
+		for i = 1, #G.jokers.cards do
+			if not G.jokers.cards[i].config.center.immune_to_vermillion and not SMODS.is_eternal(G.jokers.cards[i]) then
+				eligible_cards[#eligible_cards + 1] = G.jokers.cards[i]
+			end
+		end
+		if #eligible_cards ~= 0 then
+			--Choose 1 eligible card and get the position of it
+			local option = pseudorandom_element(eligible_cards, pseudoseed("cry_vermillion_virus"))
+			for i = 1, #G.jokers.cards do
+				if G.jokers.cards[i] == option then
+					idx = i
+					break
 				end
+			end
+			if idx and G.jokers.cards[idx] then
+				_card = create_card("Joker", G.jokers, nil, nil, nil, nil, nil, "cry_vermillion_virus_gen")
+				G.jokers.cards[idx]:start_dissolve()
+				--G.jokers.cards[idx]:remove_from_deck()
+				_card:add_to_deck()
+				_card:start_materialize()
+				G.jokers.cards[idx] = _card
+				_card:set_card_area(G.jokers)
+				G.jokers:set_ranks()
+				G.jokers:align_cards()
 			end
 		end
 	end,
@@ -999,18 +1173,22 @@ local sapphire_stamp = {
 		min = 3,
 		max = 10,
 		showdown = true,
+		yes_orb = true,
 	},
 	atlas = "blinds",
 	order = 92,
 	boss_colour = HEX("4057d6"),
 	cry_before_play = function(self)
-		local idx = pseudorandom(pseudoseed("cry_sapphire_stamp"), 1, #G.hand.highlighted)
-		G.hand:remove_from_highlighted(G.hand.highlighted[idx])
+		if #G.hand.highlighted > 0 then
+			local idx = pseudorandom(pseudoseed("cry_sapphire_stamp"), 1, #G.hand.highlighted)
+			G.hand:remove_from_highlighted(G.hand.highlighted[idx])
+		end
 	end,
 	set_blind = function(self, reset, silent)
 		if not reset then
 			G.GAME.stamp_mod = true
-			G.hand.config.highlighted_limit = G.hand.config.highlighted_limit + 1
+			SMODS.change_play_limit(1)
+			SMODS.change_discard_limit(1)
 		end
 	end,
 	defeat = function(self, silent)
@@ -1018,7 +1196,8 @@ local sapphire_stamp = {
 			G.GAME.stamp_mod = nil
 		end
 		if not G.GAME.blind.disabled then
-			G.hand.config.highlighted_limit = G.hand.config.highlighted_limit - 1
+			SMODS.change_play_limit(-1)
+			SMODS.change_discard_limit(-1)
 		end
 	end,
 	disable = function(self, silent)
@@ -1026,7 +1205,8 @@ local sapphire_stamp = {
 			G.GAME.stamp_mod = nil
 		end
 		if not G.GAME.blind.disabled then
-			G.hand.config.highlighted_limit = G.hand.config.highlighted_limit - 1
+			SMODS.change_play_limit(-1)
+			SMODS.change_discard_limit(-1)
 		end
 	end,
 }
@@ -1389,7 +1569,7 @@ local obsidian_orb = {
 			if area == G.hand then
 				if
 					s.name == "The Wheel"
-					and pseudorandom(pseudoseed("ObsidianOrb")) < G.GAME.probabilities.normal / 7
+					and SMODS.pseudorandom_probability(self, "ObsidianOrb", 1, 7, "Obsidian Orb")
 				then
 					return true
 				end
@@ -1600,6 +1780,7 @@ local items_togo = {
 	pin,
 	scorch,
 	greed,
+	repulsor,
 	vermillion_virus,
 	tornado,
 	sapphire_stamp,
@@ -1608,5 +1789,7 @@ local items_togo = {
 	lavender_loop,
 	trophy,
 	decision,
+	chromatic,
+	landlord,
 }
 return { name = "Blinds", items = items_togo }

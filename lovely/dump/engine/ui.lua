@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '435a9e8ef1b3d548ef4488606196332b7d61c0a33e2dd2225ca6c7f97e3ec32b'
+LOVELY_INTEGRITY = '23d1172f523da028d38fdd839aa4521063788064abc23b93ab9c7feef517e39c'
 
 --Class
 UIBox = Moveable:extend()
@@ -142,8 +142,8 @@ function UIBox:calculate_xywh(node, _T, recalculate, _scale)
             end
             if not node.config.text then node.config.text = '[UI ERROR]' end
             node.config.lang = node.config.lang or G.LANG
-            local tx = node.config.lang.font.FONT:getWidth(node.config.text)*node.config.lang.font.squish*scale*G.TILESCALE*node.config.lang.font.FONTSCALE
-            local ty = node.config.lang.font.FONT:getHeight()*scale*G.TILESCALE*node.config.lang.font.FONTSCALE*node.config.lang.font.TEXT_HEIGHT_SCALE
+            local tx = (node.config.font or node.config.lang.font).FONT:getWidth(node.config.text)*(node.config.font or node.config.lang.font).squish*scale*G.TILESCALE*(node.config.font or node.config.lang.font).FONTSCALE
+            local ty = (node.config.font or node.config.lang.font).FONT:getHeight()*scale*G.TILESCALE*(node.config.font or node.config.lang.font).FONTSCALE*(node.config.font or node.config.lang.font).TEXT_HEIGHT_SCALE
             if node.config.vert then local thunk = tx; tx = ty; ty = thunk end
             _nt.x, _nt.y, _nt.w, _nt.h = 
                 _T.x,
@@ -187,8 +187,8 @@ function UIBox:calculate_xywh(node, _T, recalculate, _scale)
                         _tw, _th = self:calculate_xywh(v, _ct, recalculate, fac)
                         if _th and _tw then 
                         if Big then
-                        	_th = to_big(_th):to_number()
-                        	_tw = to_big(_tw):to_number()
+                        	_th = to_number(_th)
+                        	_tw = to_number(_tw)
                         end
                             if v.UIT == G.UIT.R then 
                                 _ct.h = _ct.h + _th + padding
@@ -562,7 +562,7 @@ function UIElement:set_wh()
         for k, w in pairs(self.children) do
             if w.set_wh then 
                 local _cw, _ch = w:set_wh()
-                if Big and G.STATE == G.STATES.MENU then _cw = to_big(_cw):to_number(); _ch = to_big(_ch):to_number() end
+                if Big and G.STATE == G.STATES.MENU then _cw = to_number(_cw); _ch = to_number(_ch) end
                 if _cw and _ch then
                     if _cw > _max_w then _max_w = _cw end
                     if _ch > _max_h then _max_h = _ch end
@@ -624,7 +624,7 @@ end
 function UIElement:update_text()
     if self.config and self.config.text and not self.config.text_drawable then
         self.config.lang = self.config.lang or G.LANG
-        self.config.text_drawable = love.graphics.newText(self.config.lang.font.FONT, {G.C.WHITE,self.config.text})
+        self.config.text_drawable = love.graphics.newText((self.config.font or self.config.lang.font).FONT, {G.C.WHITE,self.config.text})
     end
 
     if self.config.ref_table and self.config.ref_table[self.config.ref_value] ~= self.config.prev_value then
@@ -698,29 +698,29 @@ function UIElement:draw_self()
     if self.config.colour[4] > 0.01 then
         if self.UIT == G.UIT.T and self.config.scale then 
             self.ARGS.text_parallax = self.ARGS.text_parallax or {}
-            self.ARGS.text_parallax.sx = -self.shadow_parrallax.x*0.5/(self.config.scale*self.config.lang.font.FONTSCALE)
-            self.ARGS.text_parallax.sy = -self.shadow_parrallax.y*0.5/(self.config.scale*self.config.lang.font.FONTSCALE)
+            self.ARGS.text_parallax.sx = -self.shadow_parrallax.x*0.5/(self.config.scale*(self.config.font or self.config.lang.font).FONTSCALE)
+            self.ARGS.text_parallax.sy = -self.shadow_parrallax.y*0.5/(self.config.scale*(self.config.font or self.config.lang.font).FONTSCALE)
 
             if (self.config.button_UIE and button_active) or (not self.config.button_UIE and self.config.shadow and G.SETTINGS.GRAPHICS.shadows == 'On') then 
                 prep_draw(self, 0.97)
-                if Big and G.STATE == G.STATES.MENU then self.config.scale = to_big(self.config.scale):to_number() end
+                if Big and G.STATE == G.STATES.MENU then self.config.scale = to_number(self.config.scale) end
                 if self.config.vert then love.graphics.translate(0,self.VT.h); love.graphics.rotate(-math.pi/2) end
                 if (self.config.shadow or (self.config.button_UIE and button_active)) and G.SETTINGS.GRAPHICS.shadows == 'On' then
                     love.graphics.setColor(0, 0, 0, 0.3*self.config.colour[4])
                     love.graphics.draw(
                         self.config.text_drawable,
-                        (self.config.lang.font.TEXT_OFFSET.x + (self.config.vert and -self.ARGS.text_parallax.sy or self.ARGS.text_parallax.sx))*(self.config.scale or 1)*self.config.lang.font.FONTSCALE/G.TILESIZE,
-                        (self.config.lang.font.TEXT_OFFSET.y + (self.config.vert and self.ARGS.text_parallax.sx or self.ARGS.text_parallax.sy))*(self.config.scale or 1)*self.config.lang.font.FONTSCALE/G.TILESIZE,
+                        ((self.config.font or self.config.lang.font).TEXT_OFFSET.x + (self.config.vert and -self.ARGS.text_parallax.sy or self.ARGS.text_parallax.sx))*(self.config.scale or 1)*(self.config.font or self.config.lang.font).FONTSCALE/G.TILESIZE,
+                        ((self.config.font or self.config.lang.font).TEXT_OFFSET.y + (self.config.vert and self.ARGS.text_parallax.sx or self.ARGS.text_parallax.sy))*(self.config.scale or 1)*(self.config.font or self.config.lang.font).FONTSCALE/G.TILESIZE,
                         0,
-                        (self.config.scale)*self.config.lang.font.squish*self.config.lang.font.FONTSCALE/G.TILESIZE,
-                        (self.config.scale)*self.config.lang.font.FONTSCALE/G.TILESIZE
+                        (self.config.scale)*(self.config.font or self.config.lang.font).squish*(self.config.font or self.config.lang.font).FONTSCALE/G.TILESIZE,
+                        (self.config.scale)*(self.config.font or self.config.lang.font).FONTSCALE/G.TILESIZE
                     )
                 end
                 love.graphics.pop()
             end
 
             prep_draw(self, 1)
-            if Big and G.STATE == G.STATES.MENU then self.config.scale = to_big(self.config.scale):to_number() end
+            if Big and G.STATE == G.STATES.MENU then self.config.scale = to_number(self.config.scale) end
             if self.config.vert then love.graphics.translate(0,self.VT.h); love.graphics.rotate(-math.pi/2) end
             if not button_active then
                 love.graphics.setColor(G.C.UI.TEXT_INACTIVE)
@@ -729,11 +729,11 @@ function UIElement:draw_self()
             end
             love.graphics.draw(
                 self.config.text_drawable,
-                self.config.lang.font.TEXT_OFFSET.x*(self.config.scale)*self.config.lang.font.FONTSCALE/G.TILESIZE,
-                self.config.lang.font.TEXT_OFFSET.y*(self.config.scale)*self.config.lang.font.FONTSCALE/G.TILESIZE,
+                (self.config.font or self.config.lang.font).TEXT_OFFSET.x*(self.config.scale)*(self.config.font or self.config.lang.font).FONTSCALE/G.TILESIZE,
+                (self.config.font or self.config.lang.font).TEXT_OFFSET.y*(self.config.scale)*(self.config.font or self.config.lang.font).FONTSCALE/G.TILESIZE,
                 0,
-                (self.config.scale)*self.config.lang.font.squish*self.config.lang.font.FONTSCALE/G.TILESIZE,
-                (self.config.scale)*self.config.lang.font.FONTSCALE/G.TILESIZE
+                (self.config.scale)*(self.config.font or self.config.lang.font).squish*(self.config.font or self.config.lang.font).FONTSCALE/G.TILESIZE,
+                (self.config.scale)*(self.config.font or self.config.lang.font).FONTSCALE/G.TILESIZE
             )
             love.graphics.pop()
         elseif self.UIT == G.UIT.B or self.UIT == G.UIT.C or self.UIT == G.UIT.R or self.UIT == G.UIT.ROOT then
@@ -840,6 +840,14 @@ function UIElement:draw_self()
         self.focus_timer = nil
     end
 
+    if self.config.underline and self.config.underline[4] > 0.01 then 
+        prep_draw(self, 1)
+        love.graphics.scale(1/(G.TILESIZE))
+        love.graphics.setLineWidth(1)
+        love.graphics.setColor(self.config.underline)
+        self:draw_pixellated_under('line', parallax_dist)
+        love.graphics.pop()
+    end
     --Draw the 'chosen triangle'
     if self.config.chosen then 
         prep_draw(self, 0.98)
@@ -1023,6 +1031,10 @@ function UIElement:remove()
         self.config.object = nil
     end
 
+    if self.config and self.config.func then
+        self.config.func = nil
+    end
+    
     if self == G.CONTROLLER.text_input_hook then 
         G.CONTROLLER.text_input_hook = nil 
     end

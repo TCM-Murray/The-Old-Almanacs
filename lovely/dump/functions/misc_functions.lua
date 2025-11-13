@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '40f335b9298f37c581f82b291eb4527bf993a96773e2fcb486e007b3a5f03ec5'
+LOVELY_INTEGRITY = 'f17b8b69442bd564aba0787b0bf95dac7060553ae7276760e665c38f711ccdd7'
 
 --Updates all display information for all displays for a given screenmode. Returns the key for the resolution option cycle
 --
@@ -206,6 +206,7 @@ function SWAP(t, i, j)
 end
 
 function pseudoshuffle(list, seed)
+    if seed and type(seed) == "string" then seed = pseudoseed(seed) end
   if seed then math.randomseed(seed) end
 
   if list[1] and list[1].sort_id then
@@ -224,7 +225,7 @@ function generate_starting_seed()
     local g_leg, g_tally = {}, 0
     for k, v in pairs(G.P_JOKER_RARITY_POOLS[4]) do
       local win_ante = get_joker_win_sticker(v, true)
-      if win_ante and (win_ante >= 8) or (v.in_pool and type(v.in_pool) == 'function' and not v:in_pool()) then
+      if win_ante and (win_ante >= 8) or not SMODS.add_to_pool(v) then
         g_leg[v.key] = true
         g_tally = g_tally + 1
       else
@@ -253,6 +254,7 @@ function get_first_legendary(_key)
 end
 
 function pseudorandom_element(_t, seed, args)
+    if seed and type(seed) == "string" then seed = pseudoseed(seed) end
     -- TODO special cases for now
     -- Preserves reverse nominal order for Suits, nominal+face_nominal order for Ranks
     -- for vanilla RNG
@@ -266,16 +268,16 @@ function pseudorandom_element(_t, seed, args)
   local keys = {}
   for k, v in pairs(_t) do
       local keep = true
-      local in_pool_func = 
+      local in_pool_func =
           args and args.in_pool
           or type(v) == 'table' and type(v.in_pool) == 'function' and v.in_pool
           or _t == G.P_CARDS and function(c)
                   --Handles special case for Erratic Deck
                   local initial_deck = args and args.starting_deck or false
-                  
+      
                   return not (
-                      type(SMODS.Ranks[c.value].in_pool) == 'function' and not SMODS.Ranks[c.value]:in_pool({initial_deck = initial_deck, suit = c.suit})
-                      or type(SMODS.Suits[c.suit].in_pool) == 'function' and not SMODS.Suits[c.suit]:in_pool({initial_deck = initial_deck, rank = c.value})
+                      not SMODS.add_to_pool(SMODS.Ranks[c.value], {initial_deck = initial_deck, suit = c.suit})
+                      or not SMODS.add_to_pool(SMODS.Suits[c.suit], {initial_deck = initial_deck, rank = c.value})
                   )
               end
       if in_pool_func then
@@ -584,14 +586,14 @@ end
 
 function get_flush(hand)
   local ret = {}
-  local four_fingers = next(find_joker('Four Fingers'))
+  local four_fingers = SMODS.four_fingers('flush')
       local suits = {}
       suits[#suits + 1] = 'cry_abstract'
       
       for i,v in pairs(SMODS.Suit.obj_buffer) do
           suits[#suits + 1] = v
       end
-  if #hand < (5 - (four_fingers and 1 or 0)) then return ret else
+  if #hand < four_fingers then return ret else
     for j = 1, #suits do
       local t = {}
       local suit = suits[j]
@@ -603,7 +605,7 @@ function get_flush(hand)
         if hand[i]:is_suit(suit, nil, true) then flush_count = flush_count + 1;  t[#t+1] = hand[i] end 
             end
       end
-      if flush_count >= (5 - (four_fingers and 1 or 0)) then
+      if flush_count >= four_fingers then
         table.insert(ret, t)
         return ret
       end
@@ -614,8 +616,8 @@ end
 
 function get_straight(hand)
   local ret = {}
-  local four_fingers = next(find_joker('Four Fingers'))
-  if #hand > 5 or #hand < (5 - (four_fingers and 1 or 0)) then return ret else
+  local four_fingers = SMODS.four_fingers('flush')
+  if #hand < four_fingers then return ret else
     local t = {}
     local IDS = {}
     for i=1, #hand do
@@ -756,10 +758,12 @@ function mod_chips(_chips)
   if G.GAME.modifiers.chips_dollar_cap then
     _chips = math.min(_chips, math.max(G.GAME.dollars, 0))
   end
+  SMODS.Scoring_Parameters.chips:modify(nil, _chips - (hand_chips or 0))
   return _chips
 end
 
 function mod_mult(_mult)
+  SMODS.Scoring_Parameters.mult:modify(nil, _mult - (mult or 0))
   return _mult
 end
 
@@ -816,13 +820,7 @@ function modulate_sound(dt)
   if not is_number(G.GAME.current_round.current_hand.chips) or not is_number(G.GAME.current_round.current_hand.mult) then
     G.ARGS.score_intensity.earned_score = 0
   else
-    local bigzero = to_big(0)
-    if not G.GAME.blind or to_big(G.GAME.blind.chips or 0) <= bigzero then
-    	G.ARGS.score_intensity.earned_score = 0
-    else
-    	G.ARGS.score_intensity.earned_score = get_chipmult_sum(G.GAME.current_round.current_hand.chips, G.GAME.current_round.current_hand.mult)
-    end
-    bigzero = nil
+    G.ARGS.score_intensity.earned_score = math.min(to_number(SMODS.calculate_round_score(true)), 1e300)
   end
   G.ARGS.score_intensity.required_score = G.GAME.blind and G.GAME.blind.chips or 0
   if G.cry_flame_override and G.cry_flame_override['duration'] > 0 then
@@ -830,43 +828,7 @@ function modulate_sound(dt)
   end
   G.ARGS.score_intensity.flames = math.min(1, (G.STAGE == G.STAGES.RUN and 1 or 0)*(
     (G.ARGS.chip_flames and (G.ARGS.chip_flames.real_intensity + G.ARGS.chip_flames.change) or 0))/10)
-  if Big.arrow and G.GAME.blind and to_big(G.GAME.blind.chips or 0) > to_big(0) then
-  	local notzero = to_big(G.ARGS.score_intensity.required_score) > to_big(0)
-  	local e_s = to_big(G.ARGS.score_intensity.earned_score)
-  	local r_s = to_big(G.ARGS.score_intensity.required_score+1)
-  	local googol = to_big(1e100)
-  	local requirement5 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(8, googol)), 5))),0.))
-  	local requirement4 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(3, googol)), 5))),0.))
-  	local requirement3 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(2, googol)), 5))),0.))
-  	local requirement2 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s^googol), 5))),0.))
-  	local requirement1 = math.max(math.min(1, 0.1*math.log(e_s/(r_s*1e100), 5)),0.)
-  	if not G.ARGS.score_intensity.ambientDramatic then G.ARGS.score_intensity.ambientDramatic = 0 end
-  	if not G.ARGS.score_intensity.ambientSinister then G.ARGS.score_intensity.ambientSinister = 0 end
-  	if not G.ARGS.score_intensity.ambientSurreal3 then G.ARGS.score_intensity.ambientSurreal3 = 0 end
-  	if not G.ARGS.score_intensity.ambientSurreal2 then G.ARGS.score_intensity.ambientSurreal2 = 0 end
-  	if not G.ARGS.score_intensity.ambientSurreal1 then G.ARGS.score_intensity.ambientSurreal1 = 0 end
-  	G.ARGS.score_intensity.ambientDramatic = notzero and requirement5:to_number() or 0
-  	G.ARGS.score_intensity.ambientSinister = ((G.ARGS.score_intensity.ambientDramatic or 0) <= 0.05 and notzero) and requirement4:to_number() or 0
-  	if Jen and type(Jen) == 'table' then
-  		Jen.dramatic = G.ARGS.score_intensity.ambientDramatic > 0
-  		Jen.sinister = G.ARGS.score_intensity.ambientSinister > 0 or Jen.dramatic
-  	end
-  	G.ARGS.score_intensity.ambientSurreal3 = (not Jen.dramatic and not Jen.sinister) and requirement3:to_number() or 0
-  	G.ARGS.score_intensity.ambientSurreal2 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and notzero) and requirement2:to_number() or 0
-  	G.ARGS.score_intensity.ambientSurreal1 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and notzero) and requirement1 or 0
-  	G.ARGS.score_intensity.organ = (G.video_organ or ((G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal1 or 0) <= 0.05 and notzero)) and math.max(math.min(1, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
-  	notzero = nil
-  	e_s = nil
-  	r_s = nil
-  	googol = nil
-  	requirement5 = nil
-  	requirement4 = nil
-  	requirement3 = nil
-  	requirement2 = nil
-  	requirement1 = nil
-  else
-  	G.ARGS.score_intensity.organ = G.video_organ or G.ARGS.score_intensity.required_score > 0 and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
-  end
+  G.ARGS.score_intensity.organ = G.video_organ or to_big(G.ARGS.score_intensity.required_score) > to_big(0) and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
 
   local AC = G.SETTINGS.ambient_control
   G.ARGS.ambient_sounds = G.ARGS.ambient_sounds or {
@@ -889,14 +851,14 @@ function modulate_sound(dt)
     	if AC[k].vol > to_big(1e300) then
     		AC[k].vol = 1e300
     	else
-    		AC[k].vol = AC[k].vol:to_number()
+    		AC[k].vol = to_number(AC[k].vol)
     	end
     end
     if type(AC[k].per) == "table" then
     	if AC[k].per > to_big(1e300) then
     		AC[k].per = 1e300
     	else
-    		AC[k].per = AC[k].per:to_number()
+    		AC[k].per = to_number(AC[k].per)
     	end
     end
   end
@@ -966,10 +928,10 @@ function count_of_suit(area, suit)
 end
 
 function prep_draw(moveable, scale, rotate, offset)
-if Big and G.STATE == G.STATES.MENU then moveable.VT.x = to_big(moveable.VT.x):to_number()
-moveable.VT.y = to_big(moveable.VT.y):to_number()
-moveable.VT.w = to_big(moveable.VT.w):to_number()
-moveable.VT.h = to_big(moveable.VT.h):to_number() end
+if Big and G.STATE == G.STATES.MENU then moveable.VT.x = to_number(moveable.VT.x)
+moveable.VT.y = to_number(moveable.VT.y)
+moveable.VT.w = to_number(moveable.VT.w)
+moveable.VT.h = to_number(moveable.VT.h) end
     love.graphics.push()
     love.graphics.scale(G.TILESCALE*G.TILESIZE)
     love.graphics.translate(
@@ -1484,7 +1446,7 @@ function set_profile_progress()
       G.PROGRESS.deck_stakes.of = G.PROGRESS.deck_stakes.of + #G.P_CENTER_POOLS.Stake
       G.PROGRESS.deck_stakes.tally = G.PROGRESS.deck_stakes.tally + get_deck_win_stake(v.key)
     end
-    if v.set == 'Joker' and not v.no_collection then 
+    if v.set == 'Joker' and not v.no_collection and not v.omit then 
       G.PROGRESS.joker_stickers.of = G.PROGRESS.joker_stickers.of + #G.P_CENTER_POOLS.Stake
       G.PROGRESS.joker_stickers.tally = G.PROGRESS.joker_stickers.tally + get_joker_win_sticker(v, true)
     end
@@ -1666,9 +1628,9 @@ end
 function cry_prob(owned, den, rigged)
 	prob = G.GAME and G.GAME.probabilities.normal or 1
 	if rigged then
-		return den
+		return to_number(math.min(den, 1e300))
 	else
-		if owned then return prob*owned else return prob end
+		if owned then return to_number(math.min(prob*owned, 1e300)) else return to_number(math.min(prob, 1e300)) end
 	end
 end
 function save_run()
@@ -1698,6 +1660,7 @@ function save_run()
     STATE = G.STATE,
     ACTION = G.action or nil,
     BLIND = G.GAME.blind:save(),
+    SCORING_CALC = G.GAME.current_scoring_calculation:save(),
     BACK = G.GAME.selected_back:save(),
     VERSION = G.VERSION
   }
@@ -1998,19 +1961,35 @@ end
       ret_string = assembled_string or 'ERROR'
     end
   elseif args.type == 'name_text' then
-    if pcall(function() ret_string = G.localization.descriptions[(args.set or args.node.config.center.set)][args.key or args.node.config.center.key].name end) then
+    if pcall(function()
+        local name_text = G.localization.descriptions[(args.set or args.node.config.center.set)][args.key or args.node.config.center.key].name
+        if type(name_text) == "table" then
+            ret_string = ""
+            for i, line in ipairs(name_text) do
+                ret_string = ret_string.. (i ~= 1 and " " or "")..line
+            end
+        else
+            ret_string = name_text
+        end
+    end) then
     else ret_string = "ERROR" end
   elseif args.type == 'name' then
-    loc_target = G.localization.descriptions[(args.set or args.node.config.center.set)][args.key or args.node.config.center.key]
+    loc_target = loc_target or {}
+    if pcall(function()
+    local name = G.localization.descriptions[(args.set or args.node.config.center.set)][args.key or args.node.config.center.key]
+    loc_target.name_parsed = name.name_parsed or {loc_parse_string(name.name)}
+    end) then
+    else loc_target.name_parsed = {} end
   end
 
+  if ret_string and type(ret_string) == 'string' then ret_string = string.gsub(ret_string, "{.-}", "") end
   if ret_string then return ret_string end
 
   if loc_target then 
     args.AUT = args.AUT or {}
     args.AUT.box_colours = {}
     if (args.type == 'descriptions' or args.type == 'other') and type(loc_target.text) == 'table' and type(loc_target.text[1]) == 'table' then
-        args.AUT.multi_box = {}
+        args.AUT.multi_box = args.AUT.multi_box or {} 
         for i, box in ipairs(loc_target.text_parsed) do
             for j, line in ipairs(box) do
                 local final_line = SMODS.localize_box(line, args)
@@ -2028,50 +2007,73 @@ end
     end
     for _, lines in ipairs(args.type == 'unlocks' and loc_target.unlock_parsed or args.type == 'name' and loc_target.name_parsed or (args.type == 'text' or args.type == 'tutorial' or args.type == 'quips') and loc_target or loc_target.text_parsed) do
       local final_line = {}
+      local final_name_assembled_string = ''
+      if args.type == 'name' and loc_target.name_parsed then
+          for _, part in ipairs(lines) do
+              local assembled_string_part = ''
+              for _, subpart in ipairs(part.strings) do
+                  assembled_string_part = assembled_string_part..(type(subpart) == 'string' and subpart or format_ui_value(format_ui_value(args.vars[tonumber(subpart[1])])) or 'ERROR')
+              end
+              final_name_assembled_string = final_name_assembled_string..assembled_string_part
+          end
+      end
       for _, part in ipairs(lines) do
         local assembled_string = ''
         for _, subpart in ipairs(part.strings) do
           assembled_string = assembled_string..(type(subpart) == 'string' and subpart or (Cryptid.pluralize and Cryptid.pluralize(subpart[1], args.vars)) or format_ui_value(args.vars[tonumber(subpart[1])]) or 'ERROR')
         end
-        local desc_scale = G.LANG.font.DESCSCALE
+        local desc_scale = (SMODS.Fonts[part.control.f] or G.FONTS[tonumber(part.control.f)] or G.LANG.font).DESCSCALE
         if G.F_MOBILE_UI then desc_scale = desc_scale*1.5 end
         if args.type == 'name' then
           final_line[#final_line+1] = {n=G.UIT.C, config={align = "m", colour = part.control.B and args.vars.colours[tonumber(part.control.B)] or part.control.X and loc_colour(part.control.X) or nil, r = 0.05, padding = 0.03, res = 0.15}, nodes={}}
           final_line[#final_line].nodes[1] = {n=G.UIT.O, config={
+          underline = part.control.u and loc_colour(part.control.u),
             object = DynaText({string = {assembled_string},
               colours = {(part.control.V and args.vars.colours[tonumber(part.control.V)]) or (part.control.C and loc_colour(part.control.C)) or args.text_colour or G.C.UI.TEXT_LIGHT},
-              bump = true,
-              silent = true,
-              pop_in = 0,
-              pop_in_rate = 4,
-              maxw = 5,
-              shadow = true,
-              y_offset = -0.6,
-              spacing = math.max(0, 0.32*(17 - #assembled_string)),
-              scale =  (0.55 - 0.004*#assembled_string)*(part.control.s and tonumber(part.control.s) or args.scale  or 1)
+              bump = not args.no_bump,
+              text_effect = SMODS.DynaTextEffects[part.control.E] and part.control.E,
+              silent = not args.no_silent,
+              pop_in = (not args.no_pop_in and (args.pop_in or 0)) or nil,
+              pop_in_rate = (not args.no_pop_in and (args.pop_in_rate or 4)) or nil,
+              maxw = args.maxw or 5,
+              shadow = not args.no_shadow,
+              y_offset = args.y_offset or -0.6,
+              spacing = (not args.no_spacing and math.max(0, 0.32*(17 - #(final_name_assembled_string or assembled_string)))) or nil,
+              font = SMODS.Fonts[part.control.f] or G.FONTS[tonumber(part.control.f)],
+              underline = part.control.u and loc_colour(part.control.u),
+              scale = (0.55 - 0.004*#(final_name_assembled_string or assembled_string))*(part.control.s and tonumber(part.control.s) or args.scale  or 1)*(args.fixed_scale or 1)
             })
           }}
         elseif part.control.E then
           local _float, _silent, _pop_in, _bump, _spacing = nil, true, nil, nil, nil
+          local text_effects
           if part.control.E == '1' then
             _float = true; _silent = true; _pop_in = 0
           elseif part.control.E == '2' then
             _bump = true; _spacing = 1
+            elseif SMODS.DynaTextEffects[part.control.E] then
+                text_effects = part.control.E
           end
           final_line[#final_line+1] = {n=G.UIT.C, config={align = "m", colour = part.control.B and args.vars.colours[tonumber(part.control.B)] or part.control.X and loc_colour(part.control.X) or nil, r = 0.05, padding = 0.03, res = 0.15}, nodes={}}
           final_line[#final_line].nodes[1] = {n=G.UIT.O, config={
+          underline = part.control.u and loc_colour(part.control.u),
             object = DynaText({string = {assembled_string}, colours = {part.control.V and args.vars.colours[tonumber(part.control.V)] or loc_colour(part.control.C or nil)},
             float = _float,
             silent = _silent,
             pop_in = _pop_in,
             bump = _bump,
             spacing = _spacing,
+            font = SMODS.Fonts[part.control.f] or G.FONTS[tonumber(part.control.f)],
+            underline = part.control.u and loc_colour(part.control.u),
+            text_effect = text_effects,
             scale = 0.32*(part.control.s and tonumber(part.control.s) or args.scale  or 1)*desc_scale})
           }}
         elseif part.control.X or part.control.B then
           final_line[#final_line+1] = {n=G.UIT.C, config={align = "m", colour = part.control.B and args.vars.colours[tonumber(part.control.B)] or loc_colour(part.control.X), r = 0.05, padding = 0.03, res = 0.15}, nodes={
               {n=G.UIT.T, config={
                 text = assembled_string,
+                font = SMODS.Fonts[part.control.f] or G.FONTS[tonumber(part.control.f)],
+                underline = part.control.u and loc_colour(part.control.u),
                 colour = part.control.V and args.vars.colours[tonumber(part.control.V)] or loc_colour(part.control.C or nil),
                 scale = 0.32*(part.control.s and tonumber(part.control.s) or args.scale  or 1)*desc_scale}},
           }}
@@ -2079,14 +2081,26 @@ end
           final_line[#final_line+1] = {n=G.UIT.T, config={
           detailed_tooltip = part.control.T and (Cryptid.get_center(part.control.T) or (G.P_CENTERS[part.control.T] or G.P_TAGS[part.control.T])) or nil,
           text = assembled_string,
+          font = SMODS.Fonts[part.control.f] or G.FONTS[tonumber(part.control.f)],
+          underline = part.control.u and loc_colour(part.control.u),
           shadow = args.shadow,
           colour = part.control.V and args.vars.colours[tonumber(part.control.V)] or not part.control.C and args.text_colour or loc_colour(part.control.C or nil, args.default_col),
           scale = 0.32*(part.control.s and tonumber(part.control.s) or args.scale  or 1)*desc_scale},}
         end
       end
-        if args.type == 'name' or args.type == 'text' then return final_line end
-        args.nodes[#args.nodes+1] = final_line
-    end
+            if args.type == 'text' then return final_line end
+            if not args.nodes and args.type == 'name' then args.nodes = {} end
+            args.nodes[#args.nodes+1] = final_line
+        end
+        if args.type == 'name' then
+            local final_name = {}
+        
+            for _, line in ipairs(args.nodes or {}) do
+                final_name[#final_name+1] = {n=G.UIT.R, config={align = "m"}, nodes=line}
+            end
+        
+            return final_name
+        end
   end
 end
 
@@ -2216,6 +2230,9 @@ return {
     reroll_cost = 5,
     joker_slots = 5,
     ante_scaling = 1,
+    play_limit = 5,
+    discard_limit = 5,
+    no_limit = '',
     consumable_slots = 2,
     no_faces = false,
     erratic_suits_and_ranks = false,

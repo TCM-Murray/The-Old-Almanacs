@@ -65,8 +65,8 @@ return {
 				name = "Baralho Crítico",
 				text = {
 					"Após cada mão jogada,",
-					"{C:green}#1# em 4{} de chance para {X:dark_edition,C:white} ^2 {} Mult",
-					"{C:green}#1# em 8{} de chance para {X:dark_edition,C:white} ^0.5 {} Mult",
+					"{C:green}#1# em #2#{} de chance para {X:dark_edition,C:white} ^2 {} Mult",
+					"{C:green}#1# em #3#{} de chance para {X:dark_edition,C:white} ^0.5 {} Mult",
 				},
 			},
 			b_cry_e_deck = {
@@ -188,7 +188,7 @@ return {
 				name = "Baralho Lendário",
 				text = {
 					"Começe com um Curinga {C:legendary}Lendário{C:legendary}",
-					"{C:green}1 em 5{} de chance para criar outro",
+					"{C:green}#1# em #2#{} de chance para criar outro",
 					"quando o Blind Chefe é derrotado",
 					"{C:inactive}(precisa ter espaço){}",
 				},
@@ -645,7 +645,7 @@ return {
 			set_cry_poker_hand_stuff = {
 				name = "Poker Hand Stuff",
 				text = {
-					"Add 4 new {C:attention}poker hands",
+					"Add 5 new {C:attention}poker hands",
 					"and enable {C:attention}Ascended hands",
 				},
 			},
@@ -1894,7 +1894,7 @@ return {
 					"{C:attention}primeiro descarte{} de cada rodada",
 				},
 			},
-			j_cry_Megg = {
+			j_cry_megg = {
 				name = "Movo",
 				text = {
 					"Venda esta carta para criar",
@@ -1916,7 +1916,7 @@ return {
 					"{X:mult,C:white}X#1#{} Mult para cada membro",
 					"no {C:attention}Cryptid Discord{}",
 					"{C:inactive}(Atualmente {X:mult,C:white}X#2#{C:inactive} Mult)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_membershipcardtwo = {
@@ -1925,7 +1925,7 @@ return {
 					"{C:chips}+#1#{} Fichas#<s>1# para cada menbro",
 					"no {C:attention}Cryptid Discord{}",
 					"{C:inactive}(Atualmente {C:chips}+#2#{C:inactive} Ficha#<s>2#)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_membershipcardtwo_balanced = {
@@ -1934,7 +1934,7 @@ return {
 					"{C:chips}+#1#{} Ficha#<s>1# para cada {C:attention}8{} membros",
 					"no {C:attention}Cryptid Discord{}",
 					"{C:inactive}(Atualmente {C:chips}+#2#{C:inactive} Ficha#<s>2#)",
-					"{C:blue,s:0.7}https://discord.gg/cryptid{}",
+					"{C:blue,s:0.7}https://discord.gg/eUf9Ur6RyB{}",
 				},
 			},
 			j_cry_meteor = {
@@ -3112,6 +3112,14 @@ return {
 					"em sua mão",
 				},
 			},
+			c_cry_meld = {
+				name = "Fusão",
+				text = {
+					"Selecione um {C:attention}Curinga{} ou",
+					"{C:attention}carta de jogo{} para",
+					"se tornar {C:dark_edition}Duas Caras",
+				},
+			},
 			c_cry_vacuum = {
 				name = "Vácuo",
 				text = {
@@ -3555,14 +3563,6 @@ return {
 					"em uma {C:attention}Carta Eco",
 				},
 			},
-			c_cry_meld = {
-				name = "Fusão",
-				text = {
-					"Selecione um {C:attention}Curinga{} ou",
-					"{C:attention}carta de jogo{} para",
-					"se tornar {C:dark_edition}Duas Caras",
-				},
-			},
 			c_cry_theblessing = {
 				name = "A Benção",
 				text = {
@@ -3861,6 +3861,15 @@ return {
 			},
 		},
 		Other = {
+			alt_wheel_of_fortune = {
+				name = "A Roda da Fortuna",
+				text = {
+					"Chance de {C:green}#1# em #2#{} de adicionar",
+					"edição {C:dark_edition}Laminada{}, {C:dark_edition}Holográfica{} ou",
+					"{C:dark_edition}Policromática{}",
+					"a um {C:attention}Curinga aleatório",
+				},
+			},
 			disabled = {
 				name = "Desativado",
 				text = {
@@ -4483,6 +4492,7 @@ return {
 			cry_joke_placeholder = "(multiple of 8)",
 
 			k_code = "Code",
+			k_chips = "fichas",
 			k_content_set = "Thematic Set",
 			b_content_sets = "Thematic Sets",
 			--Why aren't these in vanilla?
