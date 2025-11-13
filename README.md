@@ -1,6 +1,6 @@
 # Jen Almanac's Modpack Development
 
-Jen Almanac (AKA Polterwork) was a Cryptid addon for Balatro. However, it was discontinued, and the mod was left in limbo. This repository focuses on not just preserving the mod, but also bugfixing any issues coming from the modpack from where Polgerwork was obtained. That means that this repository is also for the development and version management of the "Jen Almanac's" Balatro modpack. 
+Jen Almanac (AKA Polterwork) was a Cryptid addon for Balatro. However, it was discontinued, and the mod was left in limbo. This repository focuses on not just preserving the mod, but also bugfixing any issues coming from the modpack from which Polgerwork was obtained. That means that this repository is also for the development and version management of the "Jen Almanac's" Balatro modpack. 
 It contains several branches, each representing a different version or stage of the modpack.
 
 This repository has only bugfixes in mind. I do not have in mind to add new mods or support them. I will only fix bugs that come from the main branch.
