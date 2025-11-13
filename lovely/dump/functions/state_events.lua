@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '176c7852136786b9335717d6fc15715e02397114e001580eff8a282fb9aaf515'
+LOVELY_INTEGRITY = '66b59304e839bcd80538f965ff1773914e0b66d2bf184210a0b63b4638577b41'
 
 function win_game()
     if (not G.GAME.seeded and not G.GAME.challenge) or SMODS.config.seeded_unlocks then
@@ -573,6 +573,33 @@ G.FUNCS.play_cards_from_highlighted = function(e)
 
         check_for_unlock({type = 'run_card_replays'})
 
+        local goob = (jl.fc('j_jen_goob') or {})
+        if (goob.ability or {}).active then
+        	local lh = jl.fc('j_jen_goob_lefthand', 'hand')
+        	if lh then
+        		local did_discard = false
+        		for i = 1, #G.hand.cards do
+        			local tar = G.hand.cards[i]
+        			if tar then
+        				if tar == lh then
+        					break
+        				else
+        					if not tar.highlighted and tar:xpos() < lh:xpos() then
+        						if not did_discard then
+        							did_discard = true
+        							goob:speak(goob_blurbs.play, G.C.RED)
+        						end
+        						draw_card(G.hand, G.discard, 100, 'down', false, tar)
+        						Q(function()
+        							play_sound('tarot1')
+        							lh:juice_up(0.5, 0.8)
+        						return true end)
+        					end
+        				end
+        			end
+        		end
+        	end
+        end
         if G.GAME.blind:press_play() then
             G.E_MANAGER:add_event(Event({
                 trigger = 'immediate',
@@ -690,10 +717,13 @@ function evaluate_play_intro()
     end
     -- TARGET: adding to hand effects
     scoring_hand = final_scoring_hand
+    add_crimbo_cards(scoring_hand)
     delay(0.2)
     for i=1, #scoring_hand do
         --Highlight all the cards used in scoring and play a sound indicating highlight
-        highlight_card(scoring_hand[i],(i-0.999)/5,'up')
+        if scoring_hand[i].area == G.play then
+          highlight_card(scoring_hand[i],(i-0.999)/5,'up')
+        end
     end
 
     percent = 0.3
@@ -1073,7 +1103,7 @@ G.FUNCS.evaluate_round = function()
         add_round_eval_row({bonus = true, payload = G.GAME.cry_payload, name='interest_payload', pitch = pitch, dollars = G.GAME.interest_amount*G.GAME.cry_payload*math.min(math.floor(G.GAME.dollars/5), G.GAME.interest_cap/5)})
         pitch = pitch + 0.06
         if not G.GAME.seeded and not G.GAME.challenge then
-            if to_big(G.GAME.interest_amount*math.min(math.floor(G.GAME.dollars/5), G.GAME.interest_cap/5)) == to_big(G.GAME.interest_amount*G.GAME.interest_cap/5) then
+            if G.GAME.interest_amount*math.min(math.floor(G.GAME.dollars/5), G.GAME.interest_cap/5) == G.GAME.interest_amount*G.GAME.interest_cap/5 then
                 G.PROFILES[G.SETTINGS.profile].career_stats.c_round_interest_cap_streak = G.PROFILES[G.SETTINGS.profile].career_stats.c_round_interest_cap_streak + 1
             else
                 G.PROFILES[G.SETTINGS.profile].career_stats.c_round_interest_cap_streak = 0
@@ -1086,7 +1116,7 @@ G.FUNCS.evaluate_round = function()
         add_round_eval_row({bonus = true, name='interest', pitch = pitch, dollars = G.GAME.interest_amount*math.min(math.floor(G.GAME.dollars/5), G.GAME.interest_cap/5)})
         pitch = pitch + 0.06
         if (not G.GAME.seeded and not G.GAME.challenge) or SMODS.config.seeded_unlocks then
-            if to_big(G.GAME.interest_amount*math.min(math.floor(G.GAME.dollars/5), G.GAME.interest_cap/5)) == to_big(G.GAME.interest_amount*G.GAME.interest_cap/5) then
+            if G.GAME.interest_amount*math.min(math.floor(G.GAME.dollars/5), G.GAME.interest_cap/5) == G.GAME.interest_amount*G.GAME.interest_cap/5 then 
                 G.PROFILES[G.SETTINGS.profile].career_stats.c_round_interest_cap_streak = G.PROFILES[G.SETTINGS.profile].career_stats.c_round_interest_cap_streak + 1
             else
                 G.PROFILES[G.SETTINGS.profile].career_stats.c_round_interest_cap_streak = 0

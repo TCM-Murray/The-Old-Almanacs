@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'ff7922525832d6670064e56a150110ca057a2d44dade17bfceecaf6ed7147d88'
+LOVELY_INTEGRITY = 'c917b05701d996e3bab04d79f3458a36ad8aea9cfb6e9e72ef561221eb5d22c8'
 
 --- STEAMODDED CORE
 --- UTILITY FUNCTIONS
@@ -1203,7 +1203,7 @@ SMODS.calculate_individual_effect = function(effect, scored_card, key, amount, f
         update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
         if not effect.remove_default_message then
             if from_edition then
-                card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = localize{type = 'variable', key = to_big(amount) > to_big(0) and 'a_chips' or 'a_chips_minus', vars = {amount}}, chip_mod = amount, colour = G.C.EDITION, edition = true})
+                card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = localize{type = 'variable', key = amount > 0 and 'a_chips' or 'a_chips_minus', vars = {amount}}, chip_mod = amount, colour = G.C.EDITION, edition = true})
             else
                 if key ~= 'chip_mod' then
                     if effect.chip_message then
@@ -1223,7 +1223,7 @@ SMODS.calculate_individual_effect = function(effect, scored_card, key, amount, f
         update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
         if not effect.remove_default_message then
             if from_edition then
-                card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = localize{type = 'variable', key = to_big(amount) > to_big(0) and 'a_mult' or 'a_mult_minus', vars = {amount}}, mult_mod = amount, colour = G.C.DARK_EDITION, edition = true})
+                card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = localize{type = 'variable', key = amount > 0 and 'a_mult' or 'a_mult_minus', vars = {amount}}, mult_mod = amount, colour = G.C.DARK_EDITION, edition = true})
             else
                 if key ~= 'mult_mod' then
                     if effect.mult_message then
@@ -1256,7 +1256,7 @@ SMODS.calculate_individual_effect = function(effect, scored_card, key, amount, f
         update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
         if not effect.remove_default_message then
             if from_edition then
-                card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = localize{type='variable',key= to_big(amount) > to_big(0) and 'a_xchips' or 'a_xchips_minus',vars={amount}}, Xchips_mod =  amount, colour =  G.C.EDITION, edition = true})
+                card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = localize{type='variable',key= amount > 0 and 'a_xchips' or 'a_xchips_minus',vars={amount}}, Xchips_mod =  amount, colour =  G.C.EDITION, edition = true})
             else
                 if key ~= 'Xchip_mod' then
                     if effect.xchip_message then
@@ -1276,7 +1276,7 @@ SMODS.calculate_individual_effect = function(effect, scored_card, key, amount, f
         update_hand_text({delay = 0}, {chips = hand_chips, mult = mult})
         if not effect.remove_default_message then
             if from_edition then
-                card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = localize{type='variable',key= to_big(amount) > to_big(0) and 'a_xmult' or 'a_xmult_minus',vars={amount}}, Xmult_mod =  amount, colour =  G.C.EDITION, edition = true})
+                card_eval_status_text(scored_card, 'jokers', nil, percent, nil, {message = localize{type='variable',key= amount > 0 and 'a_xmult' or 'a_xmult_minus',vars={amount}}, Xmult_mod =  amount, colour =  G.C.EDITION, edition = true})
             else
                 if key ~= 'Xmult_mod' then
                     if effect.xmult_message then

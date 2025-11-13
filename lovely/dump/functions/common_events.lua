@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'bf897f4d327f0a38172926947f73b8bce66c865aaa9d38a92ade2e4d39ad91ab'
+LOVELY_INTEGRITY = '69dfc73c105e5c8b6e0f270d91618ad32240d28237338faa92bee0c415fb5763'
 
 function set_screen_positions()
     if G.STAGE == G.STAGES.RUN then
@@ -1020,7 +1020,7 @@ function card_eval_status_text(card, eval_type, amt, percent, dir, extra)
             sound = 'xchips'
             volume = 0.7
             amt = amt
-            text = localize{type='variable',key='a_xchips'..(to_big(amt)<to_big(0) and '_minus' or ''),vars={math.abs(amt)}}
+            text = localize{type='variable',key='a_xchips'..(amt<0 and '_minus' or ''),vars={math.abs(amt)}}
             colour = G.C.BLUE
             config.type = 'fade'
             config.scale = 0.7
@@ -1250,7 +1250,7 @@ function add_round_eval_row(config)
                         }},
                         {n=G.UIT.R, config={align = 'cm', minh = 0.8}, nodes={
                             {n=G.UIT.O, config={w=0.5,h=0.5 , object = stake_sprite, hover = true, can_collide = false}},
-                            {n=G.UIT.T, config={text = G.GAME.blind.chip_text, scale = scale_number(G.GAME.blind.chips, scale, 100000), colour = G.C.RED, shadow = true}}
+                            {n=G.UIT.T, config={text = G.GAME.blind.chip_text, scale = scale_number(G.GAME.blind.chips, scale, 100000), colour = G.C[G.njy_colour], shadow = true}}
                         }}
                     }}) 
                 elseif string.find(config.name, 'tag') then
@@ -3184,6 +3184,18 @@ function generate_card_ui(_c, full_UI_table, specific_vars, card_type, badges, h
     if specific_vars and specific_vars.bonus_h_dollars then
         localize{type = 'other', key = 'card_extra_h_dollars', nodes = desc_nodes, vars = {SMODS.signed_dollars(specific_vars.bonus_h_dollars)}}
     end
+    if specific_vars.suitstats and specific_vars.suitstats.level > to_big(1) then
+    	localize{type = 'other', key = 'card_suitstats', nodes = desc_nodes, vars = {specific_vars.suitstats.level, specific_vars.suitstats.chips, specific_vars.suitstats.mult, card and localize(card.base.suit, "suits_plural"), colours = {
+    			(specific_vars.suitstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.UI.TEXT_DARK),
+    			G.C.SUITS[card and card.base.suit],
+    		}}}
+    end
+    if specific_vars.rankstats and specific_vars.rankstats.level > to_big(1) then
+    	localize{type = 'other', key = 'card_rankstats', nodes = desc_nodes, vars = {specific_vars.rankstats.level, specific_vars.rankstats.chips, specific_vars.rankstats.mult, card and card.base.value, colours = {
+    			(specific_vars.rankstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.UI.TEXT_DARK),
+    			G.C.FILTER,
+    		}}}
+    end
     elseif _c.set == 'Enhanced' then 
         if specific_vars and _c.name ~= 'Stone Card' and specific_vars.nominal_chips then
             localize{type = 'other', key = 'card_chips', nodes = desc_nodes, vars = {specific_vars.nominal_chips}}
@@ -3226,6 +3238,18 @@ function generate_card_ui(_c, full_UI_table, specific_vars, card_type, badges, h
     end
     if specific_vars and specific_vars.bonus_h_dollars and _c.effect ~= 'Gold Card' then
         localize{type = 'other', key = 'card_extra_h_dollars', nodes = desc_nodes, vars = {SMODS.signed_dollars(specific_vars.bonus_h_dollars)}}
+    end
+    if card and card.ability.effect ~= 'Stone Card' and (not card.config.center.no_suit) and (specific_vars and specific_vars.suitstats and specific_vars.suitstats.level > to_big(1)) then
+    	localize{type = 'other', key = 'card_suitstats', nodes = desc_nodes, vars = {specific_vars.suitstats.level, specific_vars.suitstats.chips, specific_vars.suitstats.mult, card and localize(card.base.suit, "suits_plural"), colours = {
+    			(specific_vars.suitstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.UI.TEXT_DARK),
+    			G.C.SUITS[card and card.base.suit],
+    		}}}
+    end
+    if card and card.ability.effect ~= 'Stone Card' and (not card.config.center.no_rank) and (specific_vars and specific_vars.rankstats and specific_vars.rankstats.level > to_big(1)) then
+    	localize{type = 'other', key = 'card_rankstats', nodes = desc_nodes, vars = {specific_vars.rankstats.level, specific_vars.rankstats.chips, specific_vars.rankstats.mult, card and card.base.value, colours = {
+    			(specific_vars.rankstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.UI.TEXT_DARK),
+    			G.C.FILTER,
+    		}}}
     end
     elseif _c.set == 'Booster' then 
         local desc_override = 'p_arcana_normal'

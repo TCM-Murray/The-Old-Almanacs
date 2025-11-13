@@ -3,6 +3,58 @@ version = "1.0.0"
 dump_lua = true
 priority = 2147483647
 
+[[patches]]
+[patches.pattern]
+target = "main.lua"
+pattern = '''function love.load()'''
+position = "before"
+payload = '''Jen = {}'''
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = "globals.lua"
+pattern = "EDITION = {1,1,1,1},"
+position = "before"
+payload = '''jen_RGB = {0,0,0,1},
+jen_RGB_HUE = 0,
+almanac = {0,0,1,1},'''
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = "if G.GAME.blind:press_play() then"
+position = "before"
+payload = '''local goob = (jl.fc('j_jen_goob') or {})
+if (goob.ability or {}).active then
+	local lh = jl.fc('j_jen_goob_lefthand', 'hand')
+	if lh then
+		local did_discard = false
+		for i = 1, #G.hand.cards do
+			local tar = G.hand.cards[i]
+			if tar then
+				if tar == lh then
+					break
+				else
+					if not tar.highlighted and tar:xpos() < lh:xpos() then
+						if not did_discard then
+							did_discard = true
+							goob:speak(goob_blurbs.play, G.C.RED)
+						end
+						draw_card(G.hand, G.discard, 100, 'down', false, tar)
+						Q(function()
+							play_sound('tarot1')
+							lh:juice_up(0.5, 0.8)
+						return true end)
+					end
+				end
+			end
+		end
+	end
+end'''
+match_indent = true
+
 # this patch does not patch in to the code properly
 [[patches]]
 [patches.pattern]
@@ -27,30 +79,29 @@ position = "at"
 payload = "if to_big(amt) > to_big(0) or to_big(amt) < to_big(0) then"
 match_indent = true
 
-# COMMENTED OUT: Hand level color patches - now handled by jl.init_hand_level_colors() metatable system
-# [[patches]]
-# [patches.pattern]
-# target = "functions/common_events.lua"
-# pattern = "G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[to_big(math.min(vals.level, 7)):to_number()]"
-# position = "at"
-# payload = "G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[number_format(vals.level)] or G.C.UI.TEXT_LIGHT --jen was here"
-# match_indent = true
+[[patches]]
+[patches.pattern]
+target = "functions/common_events.lua"
+pattern = "G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[to_big(math.min(vals.level, 7)):to_number()]"
+position = "at"
+payload = "G.hand_text_area.hand_level.config.colour = G.C.HAND_LEVELS[number_format(vals.level)] or G.C.UI.TEXT_LIGHT --jen was here"
+match_indent = true
 
-# [[patches]]
-# [patches.pattern]
-# target = "functions/common_events.lua"
-# pattern = "colours = {(to_big(G.GAME.hands[cfg.hand_type].level)==to_big(1) and G.C.UI.TEXT_DARK or G.C.HAND_LEVELS[to_big(math.min(7, G.GAME.hands[cfg.hand_type].level)):to_number()])}"
-# position = "at"
-# payload = "colours = {to_big(G.GAME.hands[cfg.hand_type].level) <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(to_big(G.GAME.hands[cfg.hand_type].level))] or G.C.HAND_LEVELS[number_format(to_big(G.GAME.hands[cfg.hand_type].level))] or G.C.UI.TEXT_DARK} --jen was here"
-# match_indent = true
+[[patches]]
+[patches.pattern]
+target = "functions/common_events.lua"
+pattern = "colours = {(to_big(G.GAME.hands[cfg.hand_type].level)==to_big(1) and G.C.UI.TEXT_DARK or G.C.HAND_LEVELS[to_big(math.min(7, G.GAME.hands[cfg.hand_type].level)):to_number()])}"
+position = "at"
+payload = "colours = {to_big(G.GAME.hands[cfg.hand_type].level) <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(to_big(G.GAME.hands[cfg.hand_type].level))] or G.C.HAND_LEVELS[number_format(to_big(G.GAME.hands[cfg.hand_type].level))] or G.C.UI.TEXT_DARK} --jen was here"
+match_indent = true
 
-# [[patches]]
-# [patches.pattern]
-# target = "functions/UI_definitions.lua"
-# pattern = '''{n=G.UIT.C, config={align = "cm", padding = 0.01, r = 0.1, colour = G.C.HAND_LEVELS[to_big(math.min(7, G.GAME.hands[handname].level)):to_number()], minw = 1.5, outline = 0.8, outline_colour = G.C.WHITE}, nodes={'''
-# position = "at"
-# payload = '''{n=G.UIT.C, config={align = "cm", padding = 0.01, r = 0.1, colour = G.C.HAND_LEVELS[number_format(G.GAME.hands[handname].level)] or G.C.WHITE, minw = 1.5, outline = 0.8, outline_colour = G.C.WHITE}, nodes={'''
-# match_indent = true
+[[patches]]
+[patches.pattern]
+target = "functions/UI_definitions.lua"
+pattern = '''{n=G.UIT.C, config={align = "cm", padding = 0.01, r = 0.1, colour = G.C.HAND_LEVELS[to_big(math.min(7, G.GAME.hands[handname].level)):to_number()], minw = 1.5, outline = 0.8, outline_colour = G.C.WHITE}, nodes={'''
+position = "at"
+payload = '''{n=G.UIT.C, config={align = "cm", padding = 0.01, r = 0.1, colour = G.C.HAND_LEVELS[number_format(G.GAME.hands[handname].level)] or G.C.WHITE, minw = 1.5, outline = 0.8, outline_colour = G.C.WHITE}, nodes={'''
+match_indent = true
 
 [[patches]]
 [patches.pattern]
@@ -83,7 +134,23 @@ pattern = "if to_big(hand_chips)*mult > to_big(0) then"
 position = "at"
 payload = "if get_chipmult_sum(hand_chips, mult) > to_big(0) then"
 match_indent = true
- 
+
+[[patches]]
+[patches.pattern]
+target = "functions/button_callbacks.lua"
+pattern = "G.screenwipecard = Card(1, 1, G.CARD_W, G.CARD_H, pseudorandom_element(G.P_CARDS), G.P_CENTERS.c_base)"
+position = "before"
+payload = "Jen.initialising = true"
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = "scoring_hand = final_scoring_hand"
+position = "after"
+payload = '''add_crimbo_cards(scoring_hand)'''
+match_indent = true
+
 # Make other cardareas score (for Crimbo)
 # Add config for making all cards in an area score (for The Faceless)
 [[patches]]
@@ -100,7 +167,18 @@ target = "functions/state_events.lua"
 pattern = "SMODS.calculate_main_scoring({cardarea = v, full_hand = G.play.cards, scoring_hand = scoring_hand, scoring_name = text, poker_hands = poker_hands}, v == G.play and scoring_hand or nil)"
 position = "at"
 payload = "SMODS.calculate_main_scoring({cardarea = v.cardarea or v, full_hand = G.play.cards, scoring_hand = scoring_hand, scoring_name = text, poker_hands = poker_hands, all_scoring = v.all_scoring}, is_scoring_area(v.cardarea or v) and scoring_hand or nil)"
-match_indent = true 
+match_indent = true
+
+# Don't highlight scoring cards in other areas (via Crimbo)
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = "highlight_card(scoring_hand[i],(i-0.999)/5,'up')"
+position = "at"
+payload = '''if scoring_hand[i].area == G.play then
+  highlight_card(scoring_hand[i],(i-0.999)/5,'up')
+end'''
+match_indent = true
 
 # Recalculate played cards (for The Faceless)
 [[patches]]
@@ -120,23 +198,22 @@ position = "at"
 payload = "local in_scoring = context.all_scoring or scoring_hand and SMODS.in_scoring(card, context.scoring_hand)"
 match_indent = true
 
-# COMMENTED OUT: Potentially problematic patch that might interfere with card evaluation
 # non-functional patch
-# [[patches]]
-# [patches.pattern]
-# target = "functions/common_events.lua"
-# pattern = "if context.cardarea == G.play then"
-# position = "after"
-# payload = '''if card.edition and card.edition.jen_wee and card.playing_card and (context.card or {}) == card then
-# 	card_eval_status_text(card, 'extra', nil, nil, nil, {message = localize('k_upgrade_ex'), colour = G.C.FILTER})
-# 	card.ability.wee_upgrades = (card.ability.wee_upgrades or 0) + 1
-# 	card.ability.perma_bonus = (card.ability.perma_bonus or 0) + (((card.ability.name or '') == 'Stone Card' or card.config.center.no_rank) and 25 or card:get_id() == 2 and 60 or (card:get_id() * 3))
-# 	card_eval_status_text(card, 'extra', nil, nil, nil, {message = number_format(card.ability.perma_bonus), colour = G.C.CHIPS})
-# end
-# if (((card.config or {}).center or {}).set or '') == 'Colour' and Jen.hv('colour', 1) then
-# 	trigger_colour_end_of_round(card)
-# end --jen was here'''
-# match_indent = true
+[[patches]]
+[patches.pattern]
+target = "functions/common_events.lua"
+pattern = "if context.cardarea == G.play then"
+position = "after"
+payload = '''if card.edition and card.edition.jen_wee and card.playing_card and (context.card or {}) == card then
+	card_eval_status_text(card, 'extra', nil, nil, nil, {message = localize('k_upgrade_ex'), colour = G.C.FILTER})
+	card.ability.wee_upgrades = (card.ability.wee_upgrades or 0) + 1
+	card.ability.perma_bonus = (card.ability.perma_bonus or 0) + (((card.ability.name or '') == 'Stone Card' or card.config.center.no_rank) and 25 or card:get_id() == 2 and 60 or (card:get_id() * 3))
+	card_eval_status_text(card, 'extra', nil, nil, nil, {message = number_format(card.ability.perma_bonus), colour = G.C.CHIPS})
+end
+if (((card.config or {}).center or {}).set or '') == 'Colour' and Jen.hv('colour', 1) then
+	trigger_colour_end_of_round(card)
+end --jen was here'''
+match_indent = true
 
 [[patches]]
 [patches.pattern]
@@ -241,9 +318,67 @@ position = "at"
 payload = "label = {(Big and Big.arrow) and localize('b_play_cap') or 'OMEGANUM NOT ENABLED, GO TO TALISMAN SETTINGS'}"
 match_indent = true
 
- 
+[[patches]]
+[patches.pattern]
+target = "functions/misc_functions.lua"
+pattern = "G.ARGS.score_intensity.earned_score = G.GAME.current_round.current_hand.chips*G.GAME.current_round.current_hand.mult"
+position = "at"
+payload = '''
+local bigzero = to_big(0)
+if not G.GAME.blind or to_big(G.GAME.blind.chips or 0) <= bigzero then
+	G.ARGS.score_intensity.earned_score = 0
+else
+	G.ARGS.score_intensity.earned_score = get_chipmult_sum(G.GAME.current_round.current_hand.chips, G.GAME.current_round.current_hand.mult)
+end
+bigzero = nil
+'''
+match_indent = true
 
- 
+[[patches]]
+[patches.pattern]
+target = "functions/misc_functions.lua"
+pattern = "G.ARGS.score_intensity.organ = G.video_organ or G.ARGS.score_intensity.required_score > 0 and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0"
+position = "at"
+payload = '''
+if Big.arrow and G.GAME.blind and to_big(G.GAME.blind.chips or 0) > to_big(0) then
+	local notzero = to_big(G.ARGS.score_intensity.required_score) > to_big(0)
+	local e_s = to_big(G.ARGS.score_intensity.earned_score)
+	local r_s = to_big(G.ARGS.score_intensity.required_score+1)
+	local googol = to_big(1e100)
+	local requirement5 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(8, googol)), 5))),0.))
+	local requirement4 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(3, googol)), 5))),0.))
+	local requirement3 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(2, googol)), 5))),0.))
+	local requirement2 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s^googol), 5))),0.))
+	local requirement1 = math.max(math.min(1, 0.1*math.log(e_s/(r_s*1e100), 5)),0.)
+	if not G.ARGS.score_intensity.ambientDramatic then G.ARGS.score_intensity.ambientDramatic = 0 end
+	if not G.ARGS.score_intensity.ambientSinister then G.ARGS.score_intensity.ambientSinister = 0 end
+	if not G.ARGS.score_intensity.ambientSurreal3 then G.ARGS.score_intensity.ambientSurreal3 = 0 end
+	if not G.ARGS.score_intensity.ambientSurreal2 then G.ARGS.score_intensity.ambientSurreal2 = 0 end
+	if not G.ARGS.score_intensity.ambientSurreal1 then G.ARGS.score_intensity.ambientSurreal1 = 0 end
+	G.ARGS.score_intensity.ambientDramatic = notzero and requirement5:to_number() or 0
+	G.ARGS.score_intensity.ambientSinister = ((G.ARGS.score_intensity.ambientDramatic or 0) <= 0.05 and notzero) and requirement4:to_number() or 0
+	if Jen and type(Jen) == 'table' then
+		Jen.dramatic = G.ARGS.score_intensity.ambientDramatic > 0
+		Jen.sinister = G.ARGS.score_intensity.ambientSinister > 0 or Jen.dramatic
+	end
+	G.ARGS.score_intensity.ambientSurreal3 = (not Jen.dramatic and not Jen.sinister) and requirement3:to_number() or 0
+	G.ARGS.score_intensity.ambientSurreal2 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and notzero) and requirement2:to_number() or 0
+	G.ARGS.score_intensity.ambientSurreal1 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and notzero) and requirement1 or 0
+	G.ARGS.score_intensity.organ = (G.video_organ or ((G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal1 or 0) <= 0.05 and notzero)) and math.max(math.min(1, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
+	notzero = nil
+	e_s = nil
+	r_s = nil
+	googol = nil
+	requirement5 = nil
+	requirement4 = nil
+	requirement3 = nil
+	requirement2 = nil
+	requirement1 = nil
+else
+	G.ARGS.score_intensity.organ = G.video_organ or G.ARGS.score_intensity.required_score > 0 and math.max(math.min(0.4, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
+end
+'''
+match_indent = true
 
 ## cartomancer compatibility
 
@@ -381,51 +516,49 @@ rankstats = G.GAME.ranks[self.base.value],
 match_indent = true
 overwrite = false
 
-# COMMENTED OUT: Hand level color patches for suit/rank stats - now handled by metatable system
-# [[patches]]
-# [patches.pattern]
-# target = "functions/common_events.lua"
-# pattern = "elseif _c.set == 'Enhanced' then"
-# position = "before"
-# payload = '''
-# if specific_vars.suitstats and specific_vars.suitstats.level > to_big(1) then
-# 	localize{type = 'other', key = 'card_suitstats', nodes = desc_nodes, vars = {specific_vars.suitstats.level, specific_vars.suitstats.chips, specific_vars.suitstats.mult, card and localize(card.base.suit, "suits_plural"), colours = {
-# 			(specific_vars.suitstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.UI.TEXT_DARK),
-# 			G.C.SUITS[card and card.base.suit],
-# 		}}}
-# end
-# if specific_vars.rankstats and specific_vars.rankstats.level > to_big(1) then
-# 	localize{type = 'other', key = 'card_rankstats', nodes = desc_nodes, vars = {specific_vars.rankstats.level, specific_vars.rankstats.chips, specific_vars.rankstats.mult, card and card.base.value, colours = {
-# 			(specific_vars.rankstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.UI.TEXT_DARK),
-# 			G.C.FILTER,
-# 		}}}
-# end
-# '''
-# match_indent = true
-# overwrite = false
+[[patches]]
+[patches.pattern]
+target = "functions/common_events.lua"
+pattern = "elseif _c.set == 'Enhanced' then"
+position = "before"
+payload = '''
+if specific_vars.suitstats and specific_vars.suitstats.level > to_big(1) then
+	localize{type = 'other', key = 'card_suitstats', nodes = desc_nodes, vars = {specific_vars.suitstats.level, specific_vars.suitstats.chips, specific_vars.suitstats.mult, card and localize(card.base.suit, "suits_plural"), colours = {
+			(specific_vars.suitstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.UI.TEXT_DARK),
+			G.C.SUITS[card and card.base.suit],
+		}}}
+end
+if specific_vars.rankstats and specific_vars.rankstats.level > to_big(1) then
+	localize{type = 'other', key = 'card_rankstats', nodes = desc_nodes, vars = {specific_vars.rankstats.level, specific_vars.rankstats.chips, specific_vars.rankstats.mult, card and card.base.value, colours = {
+			(specific_vars.rankstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.UI.TEXT_DARK),
+			G.C.FILTER,
+		}}}
+end
+'''
+match_indent = true
+overwrite = false
 
-# COMMENTED OUT: More hand level color patches for card descriptions - now handled by metatable system  
-# [[patches]]
-# [patches.pattern]
-# target = "functions/common_events.lua"
-# pattern = "elseif _c.set == 'Booster' then"
-# position = "before"
-# payload = '''
-# if card and card.ability.effect ~= 'Stone Card' and (not card.config.center.no_suit) and (specific_vars and specific_vars.suitstats and specific_vars.suitstats.level > to_big(1)) then
-# 	localize{type = 'other', key = 'card_suitstats', nodes = desc_nodes, vars = {specific_vars.suitstats.level, specific_vars.suitstats.chips, specific_vars.suitstats.mult, card and localize(card.base.suit, "suits_plural"), colours = {
-# 			(specific_vars.suitstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.UI.TEXT_DARK),
-# 			G.C.SUITS[card and card.base.suit],
-# 		}}}
-# end
-# if card and card.ability.effect ~= 'Stone Card' and (not card.config.center.no_rank) and (specific_vars and specific_vars.rankstats and specific_vars.rankstats.level > to_big(1)) then
-# 	localize{type = 'other', key = 'card_rankstats', nodes = desc_nodes, vars = {specific_vars.rankstats.level, specific_vars.rankstats.chips, specific_vars.rankstats.mult, card and card.base.value, colours = {
-# 			(specific_vars.rankstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.UI.TEXT_DARK),
-# 			G.C.FILTER,
-# 		}}}
-# end
-# '''
-# match_indent = true
-# overwrite = false
+[[patches]]
+[patches.pattern]
+target = "functions/common_events.lua"
+pattern = "elseif _c.set == 'Booster' then"
+position = "before"
+payload = '''
+if card and card.ability.effect ~= 'Stone Card' and (not card.config.center.no_suit) and (specific_vars and specific_vars.suitstats and specific_vars.suitstats.level > to_big(1)) then
+	localize{type = 'other', key = 'card_suitstats', nodes = desc_nodes, vars = {specific_vars.suitstats.level, specific_vars.suitstats.chips, specific_vars.suitstats.mult, card and localize(card.base.suit, "suits_plural"), colours = {
+			(specific_vars.suitstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.suits[card and card.base.suit or ''].level or 1)] or G.C.UI.TEXT_DARK),
+			G.C.SUITS[card and card.base.suit],
+		}}}
+end
+if card and card.ability.effect ~= 'Stone Card' and (not card.config.center.no_rank) and (specific_vars and specific_vars.rankstats and specific_vars.rankstats.level > to_big(1)) then
+	localize{type = 'other', key = 'card_rankstats', nodes = desc_nodes, vars = {specific_vars.rankstats.level, specific_vars.rankstats.chips, specific_vars.rankstats.mult, card and card.base.value, colours = {
+			(specific_vars.rankstats.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.HAND_LEVELS[number_format(G.GAME.ranks[card and card.base.value or ''].level or 1)] or G.C.UI.TEXT_DARK),
+			G.C.FILTER,
+		}}}
+end
+'''
+match_indent = true
+overwrite = false
 
 # G.UIDEF.run_info
 [[patches]]
@@ -884,13 +1017,4 @@ target = 'engine/string_packer.lua'
 pattern = "save_string = love.data.compress('string', 'deflate', save_string, 1)"
 position = 'at'
 payload = "save_string = love.data.compress('string', 'deflate', save_string, math.max(1, math.min(((Jen or {}).config or {}).save_compression_level or 1, 9)))"
-match_indent = true
-
-# Fix for booster_obj nil crash
-[[patches]]
-[patches.pattern]
-target = "card.lua"
-pattern = '''if booster_obj.create_card and type(booster_obj.create_card) == "function" then'''
-position = "at"
-payload = '''if booster_obj and booster_obj.create_card and type(booster_obj.create_card) == "function" then'''
 match_indent = true

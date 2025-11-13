@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'e46337c152ee957e002f21b7b0647adeb218364e1f7280aa13079ffaa188d066'
+LOVELY_INTEGRITY = 'b4ad30666ef3e148e2548a484d86ba70c94d5d262b0b7e3bd62bef40a5735426'
 
 --Create a global UIDEF that contains all UI definition functions\
 --As a rule, these contain functions that return a table T representing the definition for a UIBox
@@ -1127,6 +1127,11 @@ end
           }},
   
           G.SETTINGS.play_button_pos == 1 and play_button or discard_button,
+          {n=G.UIT.C, config={id = 'njy_end_button',align = "tm", padding = 0.3, r = 0.1, minw = 1.3, minh = button_height, hover = true, colour = G.C.GREEN, button = "njy_attempt_endround", one_press = true, shadow = true, func = 'njy_can_endround'}, nodes={
+                {n=G.UIT.R, config={align = "cm", padding = 0}, nodes={
+                  {n=G.UIT.T, config={text = "End", scale = text_scale, colour = G.C.UI.TEXT_LIGHT, focus_args = {button = 'y', orientation = 'bm'}, func = 'set_button_pip'}}
+                }}
+              }},
         }
       }
     return t
@@ -1439,7 +1444,7 @@ function create_UIBox_HUD_blind()
             {n=G.UIT.R, config={align = "cm", minh = 0.6}, nodes={
               {n=G.UIT.O, config={w=0.5,h=0.5, colour = G.C.BLUE, object = stake_sprite, hover = true, can_collide = false}},
               {n=G.UIT.B, config={h=0.1,w=0.1}},
-              {n=G.UIT.T, config={ref_table = G.GAME.blind, ref_value = 'chip_text', scale = 0.001, colour = G.C.RED, shadow = true, id = 'HUD_blind_count', func = 'blind_chip_UI_scale'}}
+              {n=G.UIT.T, config={ref_table = G.GAME.blind, ref_value = 'chip_text', scale = 0.001, colour = G.C.CHIPS_REQUIRED, shadow = true, id = 'HUD_blind_count', func = 'blind_chip_UI_scale'}}
             }},
             {n=G.UIT.R, config={align = "cm", minh = 0.45, maxw = 2.8, func = 'HUD_blind_reward'}, nodes={
               {n=G.UIT.T, config={text = localize('ph_blind_reward'), scale = 0.3, colour = G.C.WHITE}},

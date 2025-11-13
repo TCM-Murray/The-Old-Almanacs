@@ -1,15 +1,9 @@
 local lovely = require("lovely")
 local nativefs = require("nativefs")
 
-local info = nativefs.getDirectoryItemsInfo(lovely.mod_dir)
-local talisman_path = ""
-for i, v in pairs(info) do
-  if v.type == "directory" and nativefs.getInfo(lovely.mod_dir .. "/" .. v.name .. "/talisman.lua") then talisman_path = lovely.mod_dir .. "/" .. v.name end
-end
-
-if not nativefs.getInfo(talisman_path) then
+if not nativefs.getInfo(lovely.mod_dir .. "/Talisman") then
     error(
-        'Could not find proper Talisman folder.\nPlease make sure that Talisman is installed correctly and the folders arent nested.')
+        'Could not find proper Talisman folder.\nPlease make sure the folder for Talisman is named exactly "Talisman" and not "Talisman-main" or anything else.')
 end
 
 -- "Borrowed" from Trance
@@ -27,8 +21,8 @@ end
 local talismanloc = init_localization
 function init_localization()
 	local abc = load_file_with_fallback2(
-		talisman_path .. "/localization/" .. (G.SETTINGS.language or "en-us") .. ".lua",
-		talisman_path .. "/localization/en-us.lua"
+		lovely.mod_dir .. "/Talisman/localization/" .. (G.SETTINGS.language or "en-us") .. ".lua",
+		lovely.mod_dir .. "/Talisman/localization/en-us.lua"
 	)
 	for k, v in pairs(abc) do
 		if k ~= "descriptions" then
@@ -40,9 +34,9 @@ function init_localization()
 	talismanloc()
 end
 
-Talisman = {config_file = {disable_anims = false, break_infinity = "omeganum", score_opt_id = 3}, mod_path = talisman_path}
-if nativefs.read(Talisman.mod_path.."/config.lua") then
-    Talisman.config_file = STR_UNPACK(nativefs.read(Talisman.mod_path.."/config.lua"))
+Talisman = {config_file = {disable_anims = true, break_infinity = "omeganum", score_opt_id = 2}}
+if nativefs.read(lovely.mod_dir.."/Talisman/config.lua") then
+    Talisman.config_file = STR_UNPACK(nativefs.read(lovely.mod_dir.."/Talisman/config.lua"))
 
     if Talisman.config_file.break_infinity and type(Talisman.config_file.break_infinity) ~= 'string' then
       Talisman.config_file.break_infinity = "omeganum"
@@ -119,9 +113,9 @@ G.FUNCS.talisman_upd_score_opt = function(e)
   nativefs.write(lovely.mod_dir .. "/Talisman/config.lua", STR_PACK(Talisman.config_file))
 end
 if Talisman.config_file.break_infinity then
-  Big, err = nativefs.load(Talisman.mod_path.."/big-num/"..Talisman.config_file.break_infinity..".lua")
+  Big, err = nativefs.load(lovely.mod_dir.."/Talisman/big-num/"..Talisman.config_file.break_infinity..".lua")
   if not err then Big = Big() else Big = nil end
-  Notations = nativefs.load(Talisman.mod_path.."/big-num/notations.lua")()
+  Notations = nativefs.load(lovely.mod_dir.."/Talisman/big-num/notations.lua")()
   -- We call this after init_game_object to leave room for mods that add more poker hands
   Talisman.igo = function(obj)
       for _, v in pairs(obj.hands) do
@@ -240,20 +234,20 @@ function lenient_bignum(x)
       if ante < 1 then return to_big(100) end
       if ante <= 8 then 
         local amount = amounts[ante]
-        if to_big(amount) < to_big(R and R.E_MAX_SAFE_INTEGER or 9e15) then
-          local exponent = to_big(10)^to_number(math.floor(math.log(amount, 10) - to_big(1)))
-          amount = to_number(math.floor(amount / exponent)) * exponent
+        if (amount:lt(R.E_MAX_SAFE_INTEGER)) then
+          local exponent = to_big(10)^(math.floor(amount:log10() - to_big(1))):to_number()
+          amount = math.floor(amount / exponent):to_number() * exponent
         end
-        if type(amount) == "table" then amount:normalize() end
+        amount:normalize()
         return amount
        end
       local a, b, c, d = amounts[8], amounts[8]/amounts[7], ante-8, 1 + 0.2*(ante-8)
       local amount = math.floor(a*(b + (b*k*c)^d)^c)
-      if to_big(amount) < to_big(R and R.E_MAX_SAFE_INTEGER or 9e15) then
-        local exponent = to_big(10)^to_number(math.floor(math.log(amount, 10) - to_big(1)))
-        amount = to_number(math.floor(amount / exponent)) * exponent
+      if (amount:lt(R.E_MAX_SAFE_INTEGER)) then
+        local exponent = to_big(10)^(math.floor(amount:log10() - to_big(1))):to_number()
+        amount = math.floor(amount / exponent):to_number() * exponent
       end
-      if type(amount) == "table" then amount:normalize() end
+      amount:normalize()
       return amount
     end
   end
@@ -261,7 +255,7 @@ function lenient_bignum(x)
   -- Note that any ante scaling tweaks will need to manually changed...
   local gba = get_blind_amount
   function get_blind_amount(ante)
-    if G.GAME.modifiers.scaling and (G.GAME.modifiers.scaling ~= 1 and G.GAME.modifiers.scaling ~= 2 and G.GAME.modifiers.scaling ~= 3) then return SMODS.get_blind_amount(ante) end
+    if G.GAME.modifiers.scaling and G.GAME.modifiers.scaling > 3 then return SMODS.get_blind_amount(ante) end
     if type(to_big(1)) == 'number' then return gba(ante) end
       local k = to_big(0.75)
       if not G.GAME.modifiers.scaling or G.GAME.modifiers.scaling == 1 then 
@@ -272,11 +266,11 @@ function lenient_bignum(x)
         if ante <= 8 then return amounts[ante] end
         local a, b, c, d = amounts[8],1.6,ante-8, 1 + 0.2*(ante-8)
         local amount = a*(b+(k*c)^d)^c
-        if to_big(amount) < to_big(R and R.E_MAX_SAFE_INTEGER or 9e15) then
-          local exponent = to_big(10)^to_number(math.floor(math.log(amount, 10) - to_big(1)))
-          amount = to_number(math.floor(amount / exponent)) * exponent
+        if (amount:lt(R.E_MAX_SAFE_INTEGER)) then
+          local exponent = to_big(10)^(math.floor(amount:log10() - to_big(1))):to_number()
+          amount = math.floor(amount / exponent):to_number() * exponent
         end
-        if type(amount) == "table" then amount:normalize() end
+        amount:normalize()
         return amount
       elseif G.GAME.modifiers.scaling == 2 then 
         local amounts = {
@@ -287,11 +281,11 @@ function lenient_bignum(x)
         if ante <= 8 then return amounts[ante] end
         local a, b, c, d = amounts[8],1.6,ante-8, 1 + 0.2*(ante-8)
         local amount = a*(b+(k*c)^d)^c
-        if to_big(amount) < to_big(R and R.E_MAX_SAFE_INTEGER or 9e15) then
-          local exponent = to_big(10)^to_number(math.floor(math.log(amount, 10) - to_big(1)))
-          amount = to_number(math.floor(amount / exponent)) * exponent
+        if (amount:lt(R.E_MAX_SAFE_INTEGER)) then
+          local exponent = to_big(10)^(math.floor(amount:log10() - to_big(1))):to_number()
+          amount = math.floor(amount / exponent):to_number() * exponent
         end
-        if type(amount) == "table" then amount:normalize() end
+        amount:normalize()
         return amount
       elseif G.GAME.modifiers.scaling == 3 then 
         local amounts = {
@@ -302,11 +296,11 @@ function lenient_bignum(x)
         if ante <= 8 then return amounts[ante] end
         local a, b, c, d = amounts[8],1.6,ante-8, 1 + 0.2*(ante-8)
         local amount = a*(b+(k*c)^d)^c
-        if to_big(amount) < to_big(R and R.E_MAX_SAFE_INTEGER or 9e15) then
-          local exponent = to_big(10)^to_number(math.floor(math.log(amount, 10) - to_big(1)))
-          amount = to_number(math.floor(amount / exponent)) * exponent
+        if (amount:lt(R.E_MAX_SAFE_INTEGER)) then
+          local exponent = to_big(10)^(math.floor(amount:log10() - to_big(1))):to_number()
+          amount = math.floor(amount / exponent):to_number() * exponent
         end
-        if type(amount) == "table" then amount:normalize() end
+        amount:normalize()
         return amount
       end
     end

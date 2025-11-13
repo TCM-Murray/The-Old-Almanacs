@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '7cf1ffa4d2f5e1d1ece158619499c6fc31a18d219e011d0b0a72e2b0310272a2'
+LOVELY_INTEGRITY = '45eacba0dbd39a64ae603dffc971184241228c1bdac7efa2fecb3e687770572b'
 
 ---@class Controller
 Controller = Object:extend()
@@ -776,6 +776,17 @@ function Controller:key_press_update(key, dt)
             Cartomancer.save_config()
         end
     end
+if key == G.njy_keybind then
+	GLOBAL_njy_vanilla_override = true
+	if G.STATE_COMPLETE == true and G.buttons and G.buttons.states and G.buttons.states.visible and G.buttons.states.visible == true and G.GAME and G.GAME.chips and G.GAME.blind and G.GAME.blind.chips then
+		if not to_big then
+			function to_big(x) return x end
+		end
+		if to_big(G.GAME.chips) >= to_big(G.GAME.blind.chips) then
+			G.FUNCS.njy_attempt_endround()	-- idk what to put in this function man
+		end
+	end
+end
     if key == "escape" and G.ACTIVE_MOD_UI then
         G.FUNCS.exit_mods()
     end
@@ -993,6 +1004,9 @@ for _, keybind in pairs(SMODS.Keybinds) do
 end
     if ((self.locked) and not G.SETTINGS.paused) or (self.locks.frame) or (self.frame_buttonpress) then return end
     self.frame_buttonpress = true
+    if key == G.njy_keybind then
+    	GLOBAL_njy_vanilla_override = nil
+    end
     if key == "a" and self.held_keys["g"] and not _RELEASE_MODE then
         G.DEBUG = not(G.DEBUG)
     end

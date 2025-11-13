@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '573092a0a4f152deccd052679d0c9e799c7b4786ab4059d4cf4f22b164b383df'
+LOVELY_INTEGRITY = '7a91cb2f74766d88dcfaef971207c386f2243b12e58e7036797d818a7875e9e3'
 
 --Class
 Game = Object:extend()
@@ -2691,6 +2691,26 @@ function Game:update(dt)
         self.C.DARK_EDITION[1] = 0.6+0.2*math.sin(self.TIMERS.REAL*1.3)
         self.C.DARK_EDITION[3] = 0.6+0.2*(1- math.sin(self.TIMERS.REAL*1.3))
         self.C.DARK_EDITION[2] = math.min(self.C.DARK_EDITION[3], self.C.DARK_EDITION[1])
+        	local njy_red = self.C.RED
+        	local njy_green = self.C[G.njy_colour]
+        	if self.GAME and self.GAME.chips and self.GAME.blind and self.GAME.blind.chips then
+        		if not to_big then
+        			function to_big(x) return x end
+        		end
+        		if to_big(self.GAME.chips) >= to_big(self.GAME.blind.chips) then
+        			self.C.CHIPS_REQUIRED[1] = njy_green[1]
+        			self.C.CHIPS_REQUIRED[2] = njy_green[2]
+        			self.C.CHIPS_REQUIRED[3] = njy_green[3]
+        		else
+        			self.C.CHIPS_REQUIRED[1] = njy_red[1]
+        			self.C.CHIPS_REQUIRED[2] = njy_red[2]
+        			self.C.CHIPS_REQUIRED[3] = njy_red[3]
+        		end
+        	else
+        		self.C.CHIPS_REQUIRED[1] = njy_red[1]
+        		self.C.CHIPS_REQUIRED[2] = njy_red[2]
+        		self.C.CHIPS_REQUIRED[3] = njy_red[3]
+        	end
 
         self.C.EDITION[1] = 0.7+0.2*(1+math.sin(self.TIMERS.REAL*1.5 + 0))
         self.C.EDITION[3] = 0.7+0.2*(1+math.sin(self.TIMERS.REAL*1.5 + 3))
@@ -3306,14 +3326,14 @@ function Game:update_selecting_hand(dt)
     if not self.buttons and not self.deck_preview then
         self.buttons = UIBox{
             definition = create_UIBox_buttons(),
-            config = {align="bm", offset = {x=0,y=0.3},major = G.hand, bond = 'Weak'}
+            config = {align="bm", offset = {x=0.65,y=0.3},major = G.hand, bond = 'Weak'}
         }
     end
     if self.buttons and not self.buttons.states.visible and not self.deck_preview then
         self.buttons.states.visible = true
     end
 
-    if #G.hand.cards < 1 and #G.deck.cards < 1 and #G.play.cards < 1 then
+    if not true then
         end_round()
     end
 
@@ -3321,6 +3341,9 @@ function Game:update_selecting_hand(dt)
     if not G.STATE_COMPLETE then
         G.STATE_COMPLETE = true
         if #G.hand.cards < 1 and #G.deck.cards < 1 then
+        	G.FUNCS.njy_attempt_endround()
+        end
+        if not true then
             end_round()
         else
             save_run()
@@ -3500,7 +3523,11 @@ G.GAME.blind.chips = (G.GAME.blind.chips or math.huge)
         G.E_MANAGER:add_event(Event({
             trigger = 'immediate',
             func = function()
-        if to_big(G.GAME.chips) >= to_big(G.GAME.blind.chips) or G.GAME.current_round.hands_left < 1 then
+        if not to_big then
+        	function to_big(x) return x end
+        end
+        if (G.GAME.current_round.hands_left <= 0 and to_big(self.GAME.chips) < to_big(self.GAME.blind.chips)) or (GLOBAL_njy_vanilla_override and to_big(self.GAME.chips) >= to_big(self.GAME.blind.chips)) then
+        	stop_use()
             G.STATE = G.STATES.NEW_ROUND
         else
             G.STATE = G.STATES.DRAW_TO_HAND

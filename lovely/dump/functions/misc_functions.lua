@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '2cfe3bb2d9fdfb3e514d7642dd66d8c09c07238a965e0edc22b2de52be7b305d'
+LOVELY_INTEGRITY = '40f335b9298f37c581f82b291eb4527bf993a96773e2fcb486e007b3a5f03ec5'
 
 --Updates all display information for all displays for a given screenmode. Returns the key for the resolution option cycle
 --
@@ -816,7 +816,13 @@ function modulate_sound(dt)
   if not is_number(G.GAME.current_round.current_hand.chips) or not is_number(G.GAME.current_round.current_hand.mult) then
     G.ARGS.score_intensity.earned_score = 0
   else
-    G.ARGS.score_intensity.earned_score = G.GAME.current_round.current_hand.chips*G.GAME.current_round.current_hand.mult
+    local bigzero = to_big(0)
+    if not G.GAME.blind or to_big(G.GAME.blind.chips or 0) <= bigzero then
+    	G.ARGS.score_intensity.earned_score = 0
+    else
+    	G.ARGS.score_intensity.earned_score = get_chipmult_sum(G.GAME.current_round.current_hand.chips, G.GAME.current_round.current_hand.mult)
+    end
+    bigzero = nil
   end
   G.ARGS.score_intensity.required_score = G.GAME.blind and G.GAME.blind.chips or 0
   if G.cry_flame_override and G.cry_flame_override['duration'] > 0 then

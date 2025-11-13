@@ -21,33 +21,17 @@ local gateway = {
 		return #Cryptid.advanced_find_joker(nil, nil, nil, { "eternal" }, true, "j") < G.jokers.config.card_limit
 	end,
 	use = function(self, card, area, copier)
-		-- First, trigger the context system for all Jokers to allow "The Saint" protection
-		for i = 1, #G.jokers.cards do
-			G.jokers.cards[i]:calculate_joker({using_consumeable = true, consumeable = card})
-		end
-		
 		local deletable_jokers = {}
 		for k, v in pairs(G.jokers.cards) do
 			if not v.ability.eternal then
 				deletable_jokers[#deletable_jokers + 1] = v
 			end
 		end
-		
-		-- Set flag to indicate Gateway is destroying Jokers (for "The Saint" protection)
-		G.GAME.gateway_destroying_jokers = true
-		print("[GATEWAY DEBUG] Flag set to true, destroying " .. #deletable_jokers .. " Jokers")
-		
 		local _first_dissolve = nil
 		G.E_MANAGER:add_event(Event({
 			trigger = "before",
 			delay = 0.75,
 			func = function()
-				-- Verify flag is still set before destroying Jokers
-				if not G.GAME.gateway_destroying_jokers then
-					print("[GATEWAY DEBUG] WARNING: Flag was cleared before destruction events!")
-					G.GAME.gateway_destroying_jokers = true
-				end
-				
 				for k, v in pairs(deletable_jokers) do
 					if v.config.center.rarity == "cry_exotic" then
 						check_for_unlock({ type = "what_have_you_done" })
@@ -67,11 +51,6 @@ local gateway = {
 				card:add_to_deck()
 				G.jokers:emplace(card)
 				card:juice_up(0.3, 0.5)
-				
-				-- Clear the Gateway destruction flag AFTER the new Joker is created
-				G.GAME.gateway_destroying_jokers = false
-				print("[GATEWAY DEBUG] Flag cleared to false")
-				
 				return true
 			end,
 		}))

@@ -1,15 +1,5 @@
 --Brought to you by the same person who made the quote "The Dark Ages of smods"
 
--- Performance Optimizations (v2025.01.19):
--- - Removed UI ping/sound from Wondergeist jokers for faster processing
--- - Optimized Black Hole performance with immediate processing and reduced delays
--- - Added exponential batch processing for Wondergeist operations
--- - Skipped expensive operations during Black Hole processing
--- - Fixed circular reference in level_up_hand to prevent event queue buildup
-
--- Ensure global Jen table exists even if TOML init patch is absent
-Jen = Jen or {}
-
 maxArrow = 2.5e4
 
 --Incantation.DelayStacking = Incantation.DelayStacking + 5
@@ -37,12 +27,6 @@ local function suit_to_uno(suit)
 end
 
 local edited_default_colours = false
--- Provide Jen color globals normally injected via lovely.toml
-if not G then G = {} end
-if not G.C then G.C = {} end
-G.C.jen_RGB = G.C.jen_RGB or {0,0,0,1}
-G.C.jen_RGB_HUE = G.C.jen_RGB_HUE or 0
-G.C.almanac = G.C.almanac or {0,0,1,1}
 -- from cryptid.lua
 SMODS.current_mod.optional_features = {
 	retrigger_joker = true,
@@ -70,223 +54,6 @@ local redeemprev = '{s:0.75}Also redeems {C:attention,s:0.75}previous tier for f
 --INITIAL STUFF
 
 local CFG = SMODS.current_mod.config
-
--- Initialize safety systems from ported lovely.toml patches
-local function init_jen_safety_systems()
-    -- Set up global lvcol function for Cryptid compatibility
-    if not _G.lvcol then
-        _G.lvcol = jl.lvcol
-        
-    end
-    
-    -- Initialize hand level color system when game loads
-    if G and G.C and G.C.HAND_LEVELS then
-        jl.init_hand_level_colors()
-    end
-    
-    -- Initialize Gateway destruction flag for "The Saint" protection
-    if G and G.GAME then
-        G.GAME.gateway_destroying_jokers = false
-    end
-
-    -- Install highlight guard (avoid highlighting non-play cards when extra scoring areas are active)
-    if _G.highlight_card and not Jen._wrapped_highlight then
-        Jen._wrapped_highlight = true
-        local _orig_highlight_card = _G.highlight_card
-        _G.highlight_card = function(card, ...)
-            local cache = (G and G.GAME and G.GAME._jen_tick_cache) or nil
-            local has_extra_scoring = cache and (cache.crimbo or cache.faceless)
-                or (next(SMODS.find_card('j_jen_crimbo')) or next(SMODS.find_card('j_jen_faceless')))
-            if card and card.area ~= G.play and has_extra_scoring then
-                return
-            end
-            return _orig_highlight_card(card, ...)
-        end
-    end
-	
-    -- Ensure Crimbo/Faceless extra scoring cards are injected even without TOML patch
-    if SMODS and SMODS.calculate_main_scoring and not Jen._wrapped_calc_main then
-        Jen._wrapped_calc_main = true
-        local _orig_calc_main = SMODS.calculate_main_scoring
-        SMODS.calculate_main_scoring = function(context, scoring_hand)
-            local cache = (G and G.GAME and G.GAME._jen_tick_cache) or nil
-            local has_extra_scoring = cache and (cache.crimbo or cache.faceless)
-                or (next(SMODS.find_card('j_jen_crimbo')) or next(SMODS.find_card('j_jen_faceless')))
-            if scoring_hand and has_extra_scoring then
-                if not G.GAME._jen_added_crimbo then
-                    add_crimbo_cards(scoring_hand)
-                    G.GAME._jen_added_crimbo = true
-                    Q(function() G.GAME._jen_added_crimbo = nil return true end)
-                end
-            end
-            return _orig_calc_main(context, scoring_hand)
-        end
-    end
-
---	--Crash Fix for nil ability on cards
---	local function safe_update_alert()
---		local original_update_alert = Card.update_alert
---		function Card:update_alert(dt)
---			if not self.ability then
---				return
---			end
---			return original_update_alert(self, dt)
---		end
---		return safe_update_alert()
---	end
-
-	-- Wrap Card.update_alert to avoid crashes when `self.ability` is missing. 
-	-- Some mods or edge cases can leave `ability` unset, as we saw in the banned jokers list; in other words, this guard makes UI safe unlike the previous commented-out version which redefined the function every time.
-	local _orig_card_update_alert = Card.update_alert
-	function Card:update_alert(...)
-		if not self or not self.ability then
-			return
-		end
-		return _orig_card_update_alert(self, ...)
-	end
-end
-
--- Hook into game initialization
-local original_game_start_run = Game.start_run
-function Game:start_run(args)
-    init_jen_safety_systems()
-    -- Initialize Jen game defaults (migrated from lovely.toml patches)
-    G.GAME.straddle = G.GAME.straddle or 0
-    G.GAME.relief = G.GAME.relief or 0
-    G.GAME.tension = G.GAME.tension or 0
-    G.GAME.life = G.GAME.life or 100
-    G.GAME.max_life = G.GAME.max_life or 100
-    G.GAME.shield = G.GAME.shield or 0
-    G.GAME.max_shield = G.GAME.max_shield or 0
-    G.GAME.straddle_disp = G.GAME.straddle_disp or 0
-    G.GAME.life_disp = G.GAME.life_disp or G.GAME.life
-    G.GAME.max_life_disp = G.GAME.max_life_disp or G.GAME.max_life
-    G.GAME.shield_disp = G.GAME.shield_disp or G.GAME.shield
-    G.GAME.max_shield_disp = G.GAME.max_shield_disp or G.GAME.max_shield
-    G.GAME.suits = G.GAME.suits or {}
-    G.GAME.ranks = G.GAME.ranks or {}
-    return original_game_start_run(self, args)
-end
-
--- Wondergeist leveling job processor
-local function jen_start_wg_job(args)
-    G.GAME._wg_jobs = G.GAME._wg_jobs or {}
-    local key = tostring(args.hand_key) .. '|' .. tostring(args.op) .. '|' .. tostring(args.operand)
-    local job = G.GAME._wg_jobs[key]
-    if job then
-        job.remaining = job.remaining + args.iterations
-        job.total = (job.total or 0) + args.iterations
-    else
-        job = {
-            hand_key = args.hand_key,
-            op = args.op,
-            operand = args.operand,
-            remaining = args.iterations,
-            total = args.iterations,
-            chips = to_big(G.GAME.hands[args.hand_key].chips),
-            mult = to_big(G.GAME.hands[args.hand_key].mult),
-            batch_size = args.batch_size or 25,
-            card = args.card,
-            lv_instant = args.lv_instant,
-            label = args.label,
-        }
-        G.GAME._wg_jobs[key] = job
-    end
-end
-
--- Screen wipe init flag: set during start_run to mirror TOML behavior safely
-do
-    local _orig_start_run = G and G.FUNCS and G.FUNCS.start_run
-    if _orig_start_run and not Jen._wrapped_start_run then
-        Jen._wrapped_start_run = true
-        G.FUNCS.start_run = function(e, args)
-            Jen.initialising = true
-            local result = _orig_start_run(e, args)
-            Q(function() Jen.initialising = nil return true end)
-            return result
-        end
-    end
-end
-
--- Also initialize when cards are first loaded
-local original_init_game_object = Game.init_game_object  
-function Game:init_game_object()
-    local result = original_init_game_object(self)
-    init_jen_safety_systems()
-    return result
-end
-
--- UI Safety patch: Prevent UIElement color crashes
-local original_uielement_draw_self = UIElement.draw_self
-function UIElement:draw_self()
-    -- Jen mod safety: ensure colour config is valid before drawing
-    if self.config and self.config.colour == nil then
-        self.config.colour = jl.safe_color(nil)
-        
-    end
-    return original_uielement_draw_self(self)
-end
-
--- Replace score intensity earned_score calculation safely (mirrors TOML patch)
-local _orig_update_score_intensity = update_score_intensity
-function update_score_intensity()
-    local bigzero = to_big(0)
-    if not G.GAME.blind or to_big(G.GAME.blind.chips or 0) <= bigzero then
-        G.ARGS.score_intensity.earned_score = 0
-    else
-        G.ARGS.score_intensity.earned_score = get_chipmult_sum(G.GAME.current_round.current_hand.chips, G.GAME.current_round.current_hand.mult)
-    end
-    bigzero = nil
-    local ret = _orig_update_score_intensity()
-    -- Recalculate ambient and organ fields with OmegaNum safety when enabled
-    if Big and Big.arrow and G.GAME.blind and to_big(G.GAME.blind.chips or 0) > to_big(0) then
-        local notzero = to_big(G.ARGS.score_intensity.required_score) > to_big(0)
-        local e_s = to_big(G.ARGS.score_intensity.earned_score)
-        local r_s = to_big(G.ARGS.score_intensity.required_score+1)
-        local googol = to_big(1e100)
-        local requirement5 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(8, googol)), 5))),0.))
-        local requirement4 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(3, googol)), 5))),0.))
-        local requirement3 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s:arrow(2, googol)), 5))),0.))
-        local requirement2 = to_big(math.max(math.min(1, 0.1*(math.log(e_s/(r_s^googol), 5))),0.))
-        local requirement1 = math.max(math.min(1, 0.1*math.log(e_s/(r_s*1e100), 5)),0.)
-        if not G.ARGS.score_intensity.ambientDramatic then G.ARGS.score_intensity.ambientDramatic = 0 end
-        if not G.ARGS.score_intensity.ambientSinister then G.ARGS.score_intensity.ambientSinister = 0 end
-        if not G.ARGS.score_intensity.ambientSurreal3 then G.ARGS.score_intensity.ambientSurreal3 = 0 end
-        if not G.ARGS.score_intensity.ambientSurreal2 then G.ARGS.score_intensity.ambientSurreal2 = 0 end
-        if not G.ARGS.score_intensity.ambientSurreal1 then G.ARGS.score_intensity.ambientSurreal1 = 0 end
-        G.ARGS.score_intensity.ambientDramatic = notzero and requirement5:to_number() or 0
-        G.ARGS.score_intensity.ambientSinister = ((G.ARGS.score_intensity.ambientDramatic or 0) <= 0.05 and notzero) and requirement4:to_number() or 0
-        if Jen and type(Jen) == 'table' then
-            Jen.dramatic = G.ARGS.score_intensity.ambientDramatic > 0
-            Jen.sinister = G.ARGS.score_intensity.ambientSinister > 0 or Jen.dramatic
-        end
-        G.ARGS.score_intensity.ambientSurreal3 = (not Jen.dramatic and not Jen.sinister) and requirement3:to_number() or 0
-        G.ARGS.score_intensity.ambientSurreal2 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and notzero) and requirement2:to_number() or 0
-        G.ARGS.score_intensity.ambientSurreal1 = ((not Jen.dramatic and not Jen.sinister) and (G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and notzero) and requirement1 or 0
-        G.ARGS.score_intensity.organ = (G.video_organ or ((G.ARGS.score_intensity.ambientSurreal3 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal2 or 0) <= 0.05 and (G.ARGS.score_intensity.ambientSurreal1 or 0) <= 0.05 and notzero)) and math.max(math.min(1, 0.1*math.log(G.ARGS.score_intensity.earned_score/(G.ARGS.score_intensity.required_score+1), 5)),0.) or 0
-        notzero = nil
-        e_s = nil
-        r_s = nil
-        googol = nil
-        requirement5 = nil
-        requirement4 = nil
-        requirement3 = nil
-        requirement2 = nil
-        requirement1 = nil
-    end
-    return ret
-end
-
--- Hook update_hand_text to ensure hand level colors are initialized
-local original_update_hand_text = update_hand_text
-function update_hand_text(config, vals)
-    -- Ensure hand level colors are properly initialized for big numbers
-    if G and G.C and G.C.HAND_LEVELS and not G.C.HAND_LEVELS_JEN_POPULATED then
-        jl.init_hand_level_colors()
-        
-    end
-    return original_update_hand_text(config, vals)
-end
 
 SMODS.Atlas {
 	key = "modicon",
@@ -597,13 +364,8 @@ Jen = {
 		omega_chance = 300,
 		soul_omega_mod = 5,
 		wee_sizemod = 1.5,
-		-- Safety toggles for Kosmos/Malice calculation (enabled by default to avoid RAM spikes)
-		safer_kosmos = true,
-		kosmos_safety_threshold = 50, -- max malice tier increments processed per frame; remaining are deferred
-		kosmos_gc_trigger_kb = 256000, -- trigger an early GC cycle if memory exceeds this (in KB). Was previously 1GB which is too late
-		-- Malice scaling safety: set malice_exponent_cap to a number to approximate growth beyond that exponent, or nil/false for uncapped true formula
-		malice_exponent_cap = 20,
-		malice_cap_approximate = true, -- if true and malice_exponent_cap is set, use approximation instead of hard cap
+		safer_kosmos = false,
+		kosmos_safety_threshold = 100,
 		ante_threshold = 20,
 		ante_pow10 = 100,
 		ante_pow10_2 = 250,
@@ -741,20 +503,13 @@ function Jen:delete_hardbans()
 			if G.P_CENTERS[v] then
 				print('Deleting center : ' .. v)
 				SMODS.Center:get_obj(v):delete()
-				-- Instead of fully removing the center entry, replace it with a safe stub.
-				G.P_CENTERS[v] = {
-					_deleted_by_almanac = true,
-					effect = "",
-					name = "",
-					set = 'Center',
-				}
+				G.P_CENTERS[v] = nil
 			elseif G.P_BLINDS[v] then
 				G.P_BLINDS[v] = nil
 			end
 		end
 	end
 end
-
 
 if Jen.config.HQ_vanillashaders then
     local background_shader = NFS.read(SMODS.current_mod.path..'assets/shaders/background.fs')
@@ -1483,18 +1238,23 @@ function gameover()
 
 	if G.GAME.round_resets.ante <= G.GAME.win_ante then
 		local Jimbo = nil
-		Q(function()
-			if G.OVERLAY_MENU and G.OVERLAY_MENU:get_UIE_by_ID('jimbo_spot') then 
-				Jimbo = Card_Character({x = 0, y = 5})
-				local spot = G.OVERLAY_MENU:get_UIE_by_ID('jimbo_spot')
-				spot.config.object:remove()
-				spot.config.object = Jimbo
-				Jimbo.ui_object_updated = true
-				Jimbo:add_speech_bubble('lq_'..math.random(1,10), nil, {quip = true})
-				Jimbo:say_stuff(5)
-			end
-			return true
-		end, 2.5, nil, 'after', false, false)
+		G.E_MANAGER:add_event(Event({
+			trigger = 'after',
+			delay = 2.5,
+			blocking = false,
+			func = (function()
+				if G.OVERLAY_MENU and G.OVERLAY_MENU:get_UIE_by_ID('jimbo_spot') then 
+					Jimbo = Card_Character({x = 0, y = 5})
+					local spot = G.OVERLAY_MENU:get_UIE_by_ID('jimbo_spot')
+					spot.config.object:remove()
+					spot.config.object = Jimbo
+					Jimbo.ui_object_updated = true
+					Jimbo:add_speech_bubble('lq_'..math.random(1,10), nil, {quip = true})
+					Jimbo:say_stuff(5)
+				end
+				return true
+			end)
+		}))
 	end
 	G.STATE_COMPLETE = true
 end
@@ -1720,39 +1480,7 @@ end
 function get_max_malice(offset)
 	offset = offset or 0
 	local mod = math.max(0, (get_final_operator(true) - 1) + offset)
-	if get_final_operator(true) + offset > maxArrow then return to_big(0) end
-	
-	-- Safety check to prevent Event Manager overflow from extremely large calculations
-	-- This doesn't limit the final malice value, just prevents overwhelming the event system
-	if mod > 100 then
-		mod = 100  -- Cap the mod to prevent Event Manager crashes
-	end
-	-- Cache table for previously computed max malice tiers to avoid recomputation & big-int churn
-	G.GAME._malice_cache = G.GAME._malice_cache or {}
-	local key = mod .. '|' .. Jen.config.malice_base .. '|' .. Jen.config.malice_increase
-	local cached = G.GAME._malice_cache[key]
-	if cached then return cached end
-	local base = to_big(Jen.config.malice_base) * to_big(math.max(1, mod+1))
-	local m = to_big(mod)
-	local exp_cap = Jen.config.malice_exponent_cap
-	local pow_component
-	if exp_cap and Jen.config.malice_cap_approximate and mod > exp_cap then
-		-- Approximate beyond cap to avoid runaway memory usage
-		local capped_power = (to_big(Jen.config.malice_increase) ^ (m ^ to_big(exp_cap)))
-		pow_component = capped_power * to_big(math.max(1, math.floor((mod * (mod+1)) / (2*exp_cap))))
-	else
-		pow_component = (to_big(Jen.config.malice_increase) ^ (m ^ (m + 1)))
-	end
-	local result = base * pow_component
-	-- Store only a limited number of cache entries to bound memory
-	G.GAME._malice_cache._order = G.GAME._malice_cache._order or {}
-	table.insert(G.GAME._malice_cache._order, key)
-	G.GAME._malice_cache[key] = result
-	if #G.GAME._malice_cache._order > 128 then
-		local old_key = table.remove(G.GAME._malice_cache._order, 1)
-		G.GAME._malice_cache[old_key] = nil
-	end
-	return result
+	return get_final_operator(true) + offset > maxArrow and to_big(0) or ((to_big(Jen.config.malice_base) * to_big(math.max(1, mod+1))) * (to_big(Jen.config.malice_increase) ^ (to_big(mod) ^ to_big(mod + 1))))
 end
 
 function check_malice(check)
@@ -1762,11 +1490,10 @@ function check_malice(check)
 	if check >= get_max_malice() then
 		local maxmalice = get_max_malice()
 		local increments = 0
-		local safety_threshold = Jen.config.kosmos_safety_threshold or 50
-		local gc_trigger = Jen.config.kosmos_gc_trigger_kb or 256000
-		local max_iterations = 100  -- Additional safety to prevent Event Manager overflow
-		while (not Jen.config.safer_kosmos or increments < safety_threshold) and increments < max_iterations do
-			if collectgarbage("count") > gc_trigger then collectgarbage("collect") end
+		while not Jen.config.safer_kosmos or increments < Jen.config.kosmos_safety_threshold do
+			if collectgarbage("count") > 1048576 then
+				collectgarbage("collect")
+			end
 			if G.GAME.malice >= maxmalice and maxmalice > to_big(0) then
 				G.GAME.malice = G.GAME.malice - maxmalice
 				increments = increments + 1
@@ -1785,7 +1512,7 @@ function check_malice(check)
 			maxmalice = get_max_malice()
 			local next_check = get_malice()
 			if G.GAME.malice >= maxmalice and maxmalice > to_big(0) then
-				Q(function() check_malice(next_check) return true end, 0.1, nil, 'after')
+				QR(function() check_malice(next_check) return true end, 99)
 			end
 		end
 	end
@@ -1808,12 +1535,12 @@ function add_malice(mod, now, unscaled)
 		if jl.invalid_number(number_format(G.GAME.malice)) then G.GAME.malice = to_big(maxfloat) end
 		if not kosmos.cumulative_malice then
 			kosmos.cumulative_malice = (kosmos.cumulative_malice or to_big(0)) + mod
-			Q(function() if kosmos then
+			QR(function() if kosmos then
 				card_status_text(kosmos, '+' .. number_format(kosmos.cumulative_malice or to_big(0)), nil, 0.05*kosmos.T.h, G.C.RED, 0.6, 0.6, 0.4, 0.4, 'bm', 'jen_enchant', 0.5, 1)
 				jl.a('Malice : ' .. number_format(orig_malice + (kosmos.cumulative_malice or to_big(0))) .. ' / ' .. number_format(orig_maxmalice), 3, 0.75, G.C.RED)
 				kosmos.cumulative_malice = nil
 				check_malice(G.GAME.malice)
-			end return true end, 0.1, nil, 'after')
+			end return true end, 50)
 		else
 			kosmos.cumulative_malice = (kosmos.cumulative_malice or to_big(0)) + mod
 		end
@@ -2112,7 +1839,7 @@ G.FUNCS.cash_out = function(e)
 	if #SMODS.find_card('j_jen_arin') > 0 then
 		for k, v in pairs(SMODS.find_card('j_jen_arin')) do v:juice_up(0.6, 1) end
 		for i = 1, #SMODS.find_card('j_jen_arin') * 3 do
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2/(#SMODS.find_card('j_jen_arin')/3), func = function()
 				local duplicate = create_card('Booster', G.consumeables, nil, nil, nil, nil, k, 'arin_pack')
 				if duplicate.gc and duplicate:gc().set ~= 'Booster' then
 					duplicate:set_ability(jl.rnd('arin_booster_equilibrium', nil, G.P_CENTER_POOLS.Booster), true, nil)
@@ -2120,14 +1847,13 @@ G.FUNCS.cash_out = function(e)
 				end
 				duplicate:add_to_deck()
 				G.consumeables:emplace(duplicate)
-				return true
-			end, 0.2/(#SMODS.find_card('j_jen_arin')/3), nil, 'after')
+			return true end }))
 		end
 	end
 	if #SMODS.find_card('j_jen_lugia') > 0 then
 		for k, v in pairs(SMODS.find_card('j_jen_lugia')) do v:juice_up(0.6, 1) end
 		for i = 1, #SMODS.find_card('j_jen_lugia') * 2 do
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2/(#SMODS.find_card('j_jen_lugia')/3), func = function()
 				local duplicate = create_card('Voucher', G.consumeables, nil, nil, nil, nil, k, 'lugia_voucher')
 				if duplicate.gc and duplicate:gc().set ~= 'Voucher' then
 					duplicate:set_ability(jl.rnd('lugia_voucher_equilibrium', nil, G.P_CENTER_POOLS.Voucher), true, nil)
@@ -2135,8 +1861,7 @@ G.FUNCS.cash_out = function(e)
 				end
 				duplicate:add_to_deck()
 				G.consumeables:emplace(duplicate)
-				return true
-			end, 0.2/(#SMODS.find_card('j_jen_lugia')/3), nil, 'after')
+			return true end }))
 		end
 	end
 	QR(function()
@@ -2165,73 +1890,30 @@ G.FUNCS.reroll_shop = function(e)
 	gfrsr(e)
 end
 
--- Store the original vanilla function
-local vanilla_ease_ante = ease_ante
-
--- Initialize crash monitoring system from JenLib
-if jl and jl.crash_monitor then
-	jl.crash_monitor:setup()
-else
-	print("[JEN WARNING] JenLib crash monitoring not available - falling back to basic monitoring")
-end
-
--- Override the global ease_ante function to ensure ALL calls go through our version
-_G.ease_ante = function(mod, no_straddle, no_ante_boost, safe_rewind)
-	-- Always log when our function is called
-	-- Store original mod for vanilla function call to prevent crashes from astronomical values
-	local original_mod = mod
-	local total_mod = mod  -- This will be the total including straddle bonus
-	
+local anteref = ease_ante
+function ease_ante(mod, no_straddle, no_ante_boost, safe_rewind)
 	if mod > 0 then
 		if G.GAME.tortoise then
 			mod = mod / 2
 		end
-		-- Safety check for ante-based malice calculations to prevent Event Manager overflow
-		-- This doesn't limit the final malice value, just prevents overwhelming the event system
-		local malice_mod = mod
-		if malice_mod > 100 then
-			malice_mod = 100  -- Cap the exponent to prevent Event Manager crashes
-		end
-		add_malice(to_big(Jen.config.malice_base / 8) * (to_big(Jen.config.malice_increase) ^ malice_mod))
+		add_malice(to_big(Jen.config.malice_base / 8) * (to_big(Jen.config.malice_increase) ^ mod))
 	end
 	if Jen.config.straddle.enabled then
 		if mod < 0 and not safe_rewind then
 			G.GAME.cumulative_ante_rewind = (G.GAME.cumulative_ante_rewind or 0) + mod
 		end
 		if G.GAME.straddle_active and mod > 0 and not no_ante_boost then
-			local straddle_bonus = (G.GAME.tortoise and (G.GAME.straddle / 2) or G.GAME.straddle)
-			mod = mod + straddle_bonus
-			total_mod = total_mod + straddle_bonus  -- Add straddle bonus to total for vanilla function
+			mod = mod + (G.GAME.tortoise and (G.GAME.straddle / 2) or G.GAME.straddle)
 		elseif not no_straddle and not G.GAME.straddle_active and ((G.GAME.round_resets.ante + mod) < 0 or (G.GAME.cumulative_ante_rewind or 0) > Jen.config.ante_threshold) then
 			start_straddle()
 		end
 	end
-	
-	-- Cap the mod passed to vanilla function to prevent crashes from astronomical values
-	local safe_mod = total_mod  -- Use total_mod (including straddle bonus) instead of original_mod
-	if math.abs(safe_mod) > 1000 then
-		safe_mod = safe_mod > 0 and 1000 or -1000
-	end
-	
-	-- Safely call the vanilla function with error handling
-	local success, error_msg = pcall(function()
-		vanilla_ease_ante(safe_mod)
-	end)
-	if not success then
-		print("[JEN ERROR] Vanilla ease_ante crashed:", tostring(error_msg))
-		-- Fallback: manually increment the Ante if vanilla function fails
-		G.GAME.round_resets.ante = G.GAME.round_resets.ante + safe_mod
-	end
+	anteref(mod)
 	if jl.invalid_number(G.GAME.round_resets.ante) then
 		G.GAME.round_resets.ante = maxfloat
 	end
 	local ANTE = G.GAME.round_resets.ante
-	
-	-- Ultra-aggressive memory management: process straddle immediately and force cleanup
 	Q(function()
-		-- Force immediate memory cleanup before heavy operations
-		collectgarbage("collect")
-		
 		if Jen.config.straddle.enabled and G.GAME.straddle_active and mod ~= 0 and not no_straddle then
 			if math.ceil(mod) > 1 then mod = mod - G.GAME.straddle end
 			local add = (math.abs(mod) * (Jen.config.straddle.acceleration and math.ceil(math.max(1, (G.GAME.straddle - (Jen.config.straddle.progress_max ^ 2))) / Jen.config.straddle.progress_increment) or 1) * (mod < 0 and Jen.config.straddle.backwards_mod or 1))
@@ -2240,88 +1922,11 @@ _G.ease_ante = function(mod, no_straddle, no_ante_boost, safe_rewind)
 			end
 			if G.GAME.nitro then add = add * Jen.config.straddle.progress_min end
 			add = math.min(add, 9e15)
-			
-			-- Process straddle with additional safety
-			local success, error_msg = pcall(function()
-				progress_straddle(add)
-			end)
-			if not success then
-				print("[JEN ERROR] progress_straddle crashed:", tostring(error_msg))
-			end
-		end 
-		
-		-- Force aggressive memory cleanup after heavy operation
-		collectgarbage("collect")
-		collectgarbage("collect")  -- Double cleanup for safety
-		return true
-	end, 0.05, nil, 'immediate')  -- Even faster processing
-	
-	-- Memory-efficient: update blind_ante immediately instead of scheduling event
-	G.GAME.round_resets.blind_ante = G.GAME.round_resets.ante
-	
-	-- Emergency memory cleanup and monitoring
-	local memory_before = collectgarbage("count")
-	if memory_before > 100000 then  -- If memory usage > 100MB
-		print("[JEN WARNING] High memory usage detected:", math.floor(memory_before/1024), "KB")
-		-- Force aggressive cleanup
-		collectgarbage("collect")
-		collectgarbage("collect")
-		collectgarbage("collect")
-		local memory_after = collectgarbage("count")
-		print("[JEN INFO] Memory cleaned up:", math.floor((memory_before - memory_after)/1024), "KB")
-	end
-	
-	-- Schedule periodic memory cleanup to prevent future crashes
-	Q(function()
-		collectgarbage("collect")
-		return true
-	end, 1.0, nil, 'after')  -- Clean up every second
-	
-	-- Event Manager protection: limit event queue size
-	if G.E_MANAGER and G.E_MANAGER.event_queue then
-		local queue_size = #G.E_MANAGER.event_queue
-		if queue_size > 1000 then  -- If event queue gets too large
-			print("[JEN WARNING] Large event queue detected:", queue_size, "events - forcing cleanup!")
-			-- Force process some events to reduce queue
-			for i = 1, math.min(100, queue_size) do
-				if G.E_MANAGER.event_queue[1] then
-					table.remove(G.E_MANAGER.event_queue, 1)
-				end
-			end
-			print("[JEN INFO] Event queue reduced to:", #G.E_MANAGER.event_queue, "events")
-		end
-	end
+			progress_straddle(add)
+		end return true
+	end)
+	QR(function() G.GAME.round_resets.blind_ante = G.GAME.round_resets.ante return true end, 99)
 end
-
--- Real-time crash handler monitoring
-local crash_monitor_active = false
-local function start_crash_monitoring()
-	if crash_monitor_active then return end
-	crash_monitor_active = true
-	
-	print("[JEN DEBUG] 🔍 Starting real-time crash handler monitoring...")
-	
-	-- Monitor every frame for crash handler activation
-	Q(function()
-		-- Check if we're in a crash state
-		if G and G.E_MANAGER then
-			local memory = collectgarbage("count")
-			if memory > 200000 then  -- If memory spikes above 200MB
-				print("[JEN DEBUG] 🚨 HIGH MEMORY SPIKE DETECTED!")
-				print("[JEN DEBUG] 💾 Current memory:", memory, "KB")
-				print("[JEN DEBUG] 🕐 Time:", os.date("%H:%M:%S"))
-				print("[JEN DEBUG] ⚠️ Crash handler may activate soon...")
-			end
-		end
-		return true
-	end, 0.1, nil, 'after')  -- Check every 0.1 seconds
-end
-
--- Start crash monitoring after a delay
-Q(function()
-	start_crash_monitoring()
-	return true
-end, 3.0, nil, 'after')  -- Start after 3 seconds
 
 function bulk_sell_cards(cards, include_eternal, doublesell)
 	local value = 0
@@ -2329,7 +1934,7 @@ function bulk_sell_cards(cards, include_eternal, doublesell)
 		if include_eternal or not (v.ability or {}).eternal then
 			if doublesell and (v.edition or {}).jen_diplopia then
 				v:sell_card()
-				Q(function() if v then v:sell_card() end return true end, 0.1, nil, 'after')
+				QR(function() if v then v:sell_card() end return true end, 5)
 			else
 				v:sell_card()
 			end
@@ -2375,7 +1980,7 @@ function Card:sell_card()
 				if key == 'j_cry_altgoogol' or key == 'j_blueprint' or key == 'c_cry_pointer' then
 					v:remove_from_deck()
 					v.area:remove_card(v)
-					Q(function() if v then v:add_to_deck() G.jokers:emplace(v) end return true end, 0.1, nil, 'after')
+					QR(function() if v then v:add_to_deck() G.jokers:emplace(v) end return true end, 99)
 				end
 				key = nil
 			end
@@ -2407,14 +2012,12 @@ function lvupallhands(amnt, card, fast)
 		jl.h(localize('k_all_hands'), (amnt > 0 and '+' or '-'), (amnt > 0 and '+' or '-'), (amnt > 0 and '+' or '-') .. number_format(math.abs(amnt)), true)
 	else
 		jl.th('all')
-		Q(function()
+		G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 			play_sound('tarot1')
 			if card then card:juice_up(0.8, 0.5) end
-			return true
-		end, 0.2, nil, 'after')
+		return true end }))
 		jl.h(localize('k_all_hands'), (amnt > 0 and '+' or '-'), (amnt > 0 and '+' or '-'), (amnt > 0 and '+' or '-') .. number_format(math.abs(amnt)), true)
-		-- Reduced delay for better performance
-		delay(0.5)
+		delay(1.3)
 	end
 	for k, v in pairs(G.GAME.hands) do
 		level_up_hand(card, k, true, amnt)
@@ -2426,34 +2029,47 @@ function black_hole_effect(card, amnt)
 	if (G.SETTINGS.FASTFORWARD or 0) > 0 then
 		lvupallhands(amnt, card)
 	else
-		-- Optimized Black Hole processing for better performance
-		jl.h(localize('k_all_hands'), '...', '...', '')
-		
-		-- Reduced delays and combined operations for better performance
-		Q(function()
-			play_sound("tarot1")
-			card:juice_up(0.8, 0.5)
-			G.TAROT_INTERRUPT_PULSE = true
-			return true
-		end, 0.1, nil, 'after') -- Reduced from 0.2
-		
-		jl.hm('+', true)
-		jl.hc('+', true)
-		jl.hlv('+' .. amnt)
-		
-		-- Process all hands immediately for better performance (no batching to avoid event queue buildup)
-		-- Set Black Hole processing flag for performance optimizations
-		G.GAME._black_hole_processing = true
-		
-		-- Process all hands immediately without batching to reduce event queue
-		for k, v in pairs(G.GAME.hands) do
-			level_up_hand(card, k, true, amnt)
-		end
-		
-		-- Final cleanup
-		G.TAROT_INTERRUPT_PULSE = nil
-		G.GAME._black_hole_processing = nil -- Clear the flag
-		jl.ch()
+			update_hand_text(
+				{ sound = "button", volume = 0.7, pitch = 0.8, delay = 0.3 },
+				{ handname = localize("k_all_hands"), chips = "...", mult = "...", level = "" }
+			)
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.2,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = true
+					return true
+				end,
+			}))
+			update_hand_text({ delay = 0 }, { mult = "+", StatusText = true })
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					return true
+				end,
+			}))
+			update_hand_text({ delay = 0 }, { chips = "+", StatusText = true })
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = nil
+					return true
+				end,
+			}))
+			update_hand_text({ sound = "button", volume = 0.7, pitch = 0.9, delay = 0 }, { level = "+" .. amnt })
+			delay(1.3)
+			for k, v in pairs(G.GAME.hands) do
+				level_up_hand(card, k, true, amnt)
+			end
+			jl.ch()
 	end
 end
 
@@ -2462,8 +2078,8 @@ function Card:blackhole(amnt)
 end
 
 function Card:apply_cumulative_levels(hand)
-	Q(function()
-		Q(function()
+	G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+		G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 			if self then
 				if hand and G.GAME.hands[hand] then
 					jl.th(hand)
@@ -2475,10 +2091,8 @@ function Card:apply_cumulative_levels(hand)
 					self.cumulative_lvs = nil
 				end
 			end
-			return true
-		end, 0.2, nil, 'after')
-		return true
-	end, 0.2, nil, 'after')
+		return true end }))
+	return true end }))
 end
 
 local function change_blind_size(newsize, instant, silent)
@@ -2492,14 +2106,13 @@ local function change_blind_size(newsize, instant, silent)
 		chips_UI:juice_up()
 		if not silent then play_sound('chips2') end
 	else
-		Q(function()
+		G.E_MANAGER:add_event(Event({func = function()
 			G.GAME.blind.chip_text = number_format(newsize)
 			G.FUNCS.blind_chip_UI_scale(G.hand_text_area.blind_chips)
 			G.HUD_blind:recalculate() 
 			chips_UI:juice_up()
 			if not silent then play_sound('chips2') end
-			return true
-		end)
+		return true end }))
 	end
 end
 
@@ -2529,32 +2142,36 @@ function card_status_text(card, text, xoffset, yoffset, colour, size, DELAY, jui
 			G.ROOM.jiggle = G.ROOM.jiggle + jiggle
 		end
 	else
-		Q(function()
-			if F and type(F) == 'function' then F(card) end
-			attention_text({
-				text = text,
-				scale = size or 1, 
-				hold = 0.7 + (DELAY or 0),
-				backdrop_colour = colour or (G.C.FILTER),
-				align = align or 'bm',
-				major = card,
-				offset = {x = xoffset or 0, y = yoffset or (-0.05*G.CARD_H)}
-			})
-			if sound then
-				play_sound(sound, pitch or (0.9 + (0.2*math.random())), volume or 1)
-			end
-			if juice then
-				if type(juice) == 'table' then
-					card:juice_up(juice[1], juice[2])
-				elseif type(juice) == 'number' and juice ~= 0 then
-					card:juice_up(juice, juice / 6)
+		G.E_MANAGER:add_event(Event({
+			trigger = trig,
+			delay = DELAY,
+			func = function()
+				if F and type(F) == 'function' then F(card) end
+				attention_text({
+					text = text,
+					scale = size or 1, 
+					hold = 0.7 + (DELAY or 0),
+					backdrop_colour = colour or (G.C.FILTER),
+					align = align or 'bm',
+					major = card,
+					offset = {x = xoffset or 0, y = yoffset or (-0.05*G.CARD_H)}
+				})
+				if sound then
+					play_sound(sound, pitch or (0.9 + (0.2*math.random())), volume or 1)
 				end
+				if juice then
+					if type(juice) == 'table' then
+						card:juice_up(juice[1], juice[2])
+					elseif type(juice) == 'number' and juice ~= 0 then
+						card:juice_up(juice, juice / 6)
+					end
+				end
+				if jiggle then
+					G.ROOM.jiggle = G.ROOM.jiggle + jiggle
+				end
+				return true
 			end
-			if jiggle then
-				G.ROOM.jiggle = G.ROOM.jiggle + jiggle
-			end
-			return true
-		end, DELAY, nil, trig)
+		}))
 	end
 end
 
@@ -2570,29 +2187,32 @@ end
 
 function CardArea:announce_sizechange(mod, set)
 	if (mod or 0) ~= 0 then
-		Q(function()
-			mod = mod or 0
-			local text = 'Max +'
-			local col = G.C.GREEN
-			if set then
-				text = 'Max ='
-				col = G.C.FILTER
-			elseif mod < 0 then
-				text = 'Max -'
-				col = G.C.RED
+		G.E_MANAGER:add_event(Event({
+			trigger = 'immediate',
+			func = function()
+				mod = mod or 0
+				local text = 'Max +'
+				local col = G.C.GREEN
+				if set then
+					text = 'Max ='
+					col = G.C.FILTER
+				elseif mod < 0 then
+					text = 'Max -'
+					col = G.C.RED
+				end
+				attention_text({
+					text = text..tostring(math.abs(mod)),
+					scale = 1, 
+					hold = 1,
+					cover = self,
+					cover_colour = col,
+					align = 'cm',
+				})
+				play_sound('highlight2', 0.715, 0.2)
+				play_sound('generic1')
+				return true
 			end
-			attention_text({
-				text = text..tostring(math.abs(mod)),
-				scale = 1, 
-				hold = 1,
-				cover = self,
-				cover_colour = col,
-				align = 'cm',
-			})
-			play_sound('highlight2', 0.715, 0.2)
-			play_sound('generic1')
-			return true
-		end, nil, nil, 'immediate')
+		}))
 		delay(0.5)
 	end
 end
@@ -2642,33 +2262,48 @@ function CardArea:change_max_highlight(mod, silent)
 end
 
 function ease_winante(mod)
-	Q(function()
-		local ante_UI = G.hand_text_area.ante
-		mod = mod or 0
-		local text = 'Max'
-		local col = G.C.PURPLE
-		if mod < 0 then
-			text = text .. ' -'
-			col = G.C.GREEN
-		else
-			text = text .. ' +'
+	G.E_MANAGER:add_event(Event({
+		trigger = 'immediate',
+		func = function()
+			local ante_UI = G.hand_text_area.ante
+			mod = mod or 0
+			local text = 'Max'
+			local col = G.C.PURPLE
+			if mod < 0 then
+				text = text .. ' -'
+				col = G.C.GREEN
+			else
+				text = text .. ' +'
+			end
+			ante_UI.config.object:update()
+			G.GAME.win_ante=G.GAME.win_ante+mod
+			G.HUD:recalculate()
+			attention_text({
+				text = text..tostring(math.abs(mod)),
+				scale = 0.6, 
+				hold = 0.9,
+				cover = ante_UI.parent,
+				cover_colour = col,
+				align = 'cm',
+			})
+			play_sound('highlight2', 0.4, 0.2)
+			play_sound('generic1')
+			return true
 		end
-		ante_UI.config.object:update()
-		G.GAME.win_ante=G.GAME.win_ante+mod
-		G.HUD:recalculate()
-		attention_text({
-			text = text..tostring(math.abs(mod)),
-			scale = 0.6, 
-			hold = 0.9,
-			cover = ante_UI.parent,
-			cover_colour = col,
-			align = 'cm',
-		})
-		play_sound('highlight2', 0.4, 0.2)
-		play_sound('generic1')
-		return true
-	end, nil, nil, 'immediate')
+	}))
 end
+
+--[[
+function ease_ante_autoraisewinante(mod)
+	local targetante = G.GAME.round_resets.ante + mod
+	ease_ante(mod)
+	if G.GAME.win_ante < targetante then
+		G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.1, func = function()
+			ease_winante(targetante - G.GAME.win_ante)
+		return true end }))
+	end
+end
+]]
 
 local function multante(number)
 	--local targetante = math.abs(G.GAME.round_resets.ante * (2 ^ (number or 1)))
@@ -2731,114 +2366,39 @@ local misc_done = false
 
 local game_updateref = Game.update
 function Game:update(dt)
-	-- Safely wrap the original update call to prevent crashes
-	local success, error_msg = pcall(function()
-		-- Per-tick memo: cache expensive find_card scans used multiple times this frame
-		G.GAME._jen_tick_cache = G.GAME._jen_tick_cache or {}
-		local cache = G.GAME._jen_tick_cache
-		cache.faceless = cache.faceless or (next(SMODS.find_card('j_jen_faceless')) and true or false)
-		cache.crimbo = cache.crimbo or (next(SMODS.find_card('j_jen_crimbo')) and true or false)
-		cache.kudaai_or_foundry = cache.kudaai_or_foundry or ((#SMODS.find_card('j_jen_kudaai') + #SMODS.find_card('j_jen_foundry')) > 0)
-		cache.bulwark_count = cache.bulwark_count or #SMODS.find_card('j_jen_bulwark')
-		-- Process Wondergeist jobs if queued
-		if G.GAME._wg_jobs then
-			for k, job in pairs(G.GAME._wg_jobs) do
-				if (job.remaining or 0) > 0 then
-					local handstats = G.GAME.hands[job.hand_key]
-					local cnt = math.min(job.batch_size, job.remaining)
-					
-					-- Optimized batch processing for better performance
-					if cnt > 10 then
-						-- For large batches, use exponential operations when possible
-						if job.op == 2 and job.operand == 2 then
-							-- ^^2 operation: use power of 2 for large batches
-							local power = math.min(cnt, 100) -- Cap at reasonable power
-							job.chips = job.chips:arrow(2, 2):arrow(2, power - 1)
-							job.mult = job.mult:arrow(2, 2):arrow(2, power - 1)
-							job.remaining = job.remaining - power
-						elseif job.op == 3 and job.operand == 3 then
-							-- ^^^3 operation: use power of 3 for large batches
-							local power = math.min(cnt, 50) -- Cap at reasonable power for ^^^3
-							job.chips = job.chips:arrow(3, 3):arrow(3, power - 1)
-							job.mult = job.mult:arrow(3, 3):arrow(3, power - 1)
-							job.remaining = job.remaining - power
-						else
-							-- Fallback to regular batch processing
-							for i = 1, cnt do
-								job.chips = job.chips:arrow(job.op, job.operand)
-								job.mult = job.mult:arrow(job.op, job.operand)
-							end
-							job.remaining = job.remaining - cnt
-						end
-					else
-						-- For small batches, use regular processing
-						for i = 1, cnt do
-							job.chips = job.chips:arrow(job.op, job.operand)
-							job.mult = job.mult:arrow(job.op, job.operand)
-						end
-						job.remaining = job.remaining - cnt
-					end
-					
-					handstats.chips = job.chips
-					handstats.mult = job.mult
-					if job.remaining <= 0 then
-						if not job.lv_instant and job.card and job.label then
-							delay(0.5)
-							Q(function() job.card:juice_up(job.op - 1, job.op - 1) return true end)
-							if job.op == 2 then
-								play_sound_q('talisman_eechip'); play_sound_q('talisman_eemult')
-							else
-								play_sound_q('talisman_eeechip'); play_sound_q('talisman_eeemult')
-							end
-							jl.hcm(job.label .. ' (x' .. tostring(job.total or 0) .. ')', job.label .. ' (x' .. tostring(job.total or 0) .. ')', true)
-							jl.hcm(handstats.chips, handstats.mult)
-							delay(0.5)
-						end
-						G.GAME._wg_jobs[k] = nil
-					end
-				end
-			end
-		end
-		if not Jen.bans_done then
-			init_cardbans()
-			Jen.bans_done = true
-		end
-		if not misc_done then
-			if G.P_CENTERS.j_jen_maxie then
-				for k, v in pairs(maxie_consumables) do
-					local cen = G.P_CENTERS[v]
-					if cen and Jen.config.disable_bans or (not jl.bf(v, Jen.config.bans) and not jl.bf('!' .. v, Jen.config.bans)) then
-						if maxie_added >= 3 then
-							maxie_desc[#maxie_desc] = maxie_desc[#maxie_desc] .. ','
-							maxie_desc[#maxie_desc + 1] = ''
-							maxie_added = 0
-						end
-						if maxie_desc[#maxie_desc] ~= '' then
-							maxie_desc[#maxie_desc] = maxie_desc[#maxie_desc] .. ', {C:' .. string.lower(cen.set) .. '}' .. k .. '{}'
-						else
-							maxie_desc[#maxie_desc] = '{C:' .. string.lower(cen.set) .. '}' .. k .. '{}'
-						end
-						maxie_added = maxie_added + 1
-					end
-				end
-				maxie_desc[#maxie_desc + 1] = ' '
-				maxie_desc[#maxie_desc + 1] = caption('#1#')
-				maxie_desc[#maxie_desc + 1] = faceart('Maxie')
-				G.P_CENTERS.j_jen_maxie.loc_txt.text = maxie_desc
-				init_localization()
-			end
-			G.P_CENTERS.c_soul.fusable = true
-			G.P_CENTERS.c_black_hole.fusable = true
-			if G.P_CENTERS.c_cry_white_hole then G.P_CENTERS.c_cry_white_hole.fusable = true end
-			misc_done = true
-		end
-	end)
-	
-	if not success then
-
+	if not Jen.bans_done then
+		init_cardbans()
+		Jen.bans_done = true
 	end
-	
-	-- Always call the original update, even if our stuff failed
+	if not misc_done then
+		if G.P_CENTERS.j_jen_maxie then
+			for k, v in pairs(maxie_consumables) do
+				local cen = G.P_CENTERS[v]
+				if cen and Jen.config.disable_bans or (not jl.bf(v, Jen.config.bans) and not jl.bf('!' .. v, Jen.config.bans)) then
+					if maxie_added >= 3 then
+						maxie_desc[#maxie_desc] = maxie_desc[#maxie_desc] .. ','
+						maxie_desc[#maxie_desc + 1] = ''
+						maxie_added = 0
+					end
+					if maxie_desc[#maxie_desc] ~= '' then
+						maxie_desc[#maxie_desc] = maxie_desc[#maxie_desc] .. ', {C:' .. string.lower(cen.set) .. '}' .. k .. '{}'
+					else
+						maxie_desc[#maxie_desc] = '{C:' .. string.lower(cen.set) .. '}' .. k .. '{}'
+					end
+					maxie_added = maxie_added + 1
+				end
+			end
+			maxie_desc[#maxie_desc + 1] = ' '
+			maxie_desc[#maxie_desc + 1] = caption('#1#')
+			maxie_desc[#maxie_desc + 1] = faceart('Maxie')
+			G.P_CENTERS.j_jen_maxie.loc_txt.text = maxie_desc
+			init_localization()
+		end
+		G.P_CENTERS.c_soul.fusable = true
+		G.P_CENTERS.c_black_hole.fusable = true
+		if G.P_CENTERS.c_cry_white_hole then G.P_CENTERS.c_cry_white_hole.fusable = true end
+		misc_done = true
+	end
 	game_updateref(self, dt)
 	if G.ARGS.LOC_COLOURS then
 	
@@ -2925,12 +2485,6 @@ function Game:update(dt)
 		Jen.kudaai_active = (#SMODS.find_card('j_jen_kudaai') + #SMODS.find_card('j_jen_foundry')) > 0
 		Jen.luke_active = #SMODS.find_card('j_jen_luke') > 0
 		Jen.dandy_active = #SMODS.find_card('j_jen_dandy') > 0
-		
-		-- Ensure Gateway destruction flag is properly initialized
-		if G.GAME.gateway_destroying_jokers == nil then
-			G.GAME.gateway_destroying_jokers = false
-		end
-		
 		Jen.should_play_extraordinary = #Cryptid.advanced_find_joker(nil, "jen_extraordinary", nil, nil, true) ~= 0 or get_kosmos() or #Cryptid.advanced_find_joker(nil, "jen_transcendent", nil, nil, true) ~= 0 or #Cryptid.advanced_find_joker(nil, "jen_omegatranscendent", nil, nil, true) ~= 0
 		Jen.should_play_wondrous = not Jen.should_play_extraordinary and #Cryptid.advanced_find_joker(nil, "jen_wondrous", nil, nil, true) ~= 0
 	end
@@ -3115,7 +2669,44 @@ SMODS.ConsumableType {
 	shop_rate = 0
 }
 
+--it'll be a while before we get to this point...
+--[[
+SMODS.ConsumableType {
+	key = 'jen_weapon',
+	collection_rows = {5, 5},
+	primary_colour = G.C.CHIPS,
+	secondary_colour = HEX('6a7f00'),
+	loc_txt = {
+		collection = 'Weapons',
+		name = 'Weapon'
+	},
+	shop_rate = 0
+}
 
+SMODS.ConsumableType {
+	key = 'jen_gear',
+	collection_rows = {5, 5},
+	primary_colour = G.C.CHIPS,
+	secondary_colour = HEX('00ffaf'),
+	loc_txt = {
+		collection = 'Gear',
+		name = 'Gear'
+	},
+	shop_rate = 0
+}
+
+SMODS.ConsumableType {
+	key = 'jen_bauble',
+	collection_rows = {5, 5},
+	primary_colour = G.C.CHIPS,
+	secondary_colour = HEX('af00af'),
+	loc_txt = {
+		collection = 'Baubles',
+		name = 'Bauble'
+	},
+	shop_rate = 0
+}
+]]
 
 --SOUNDS
 
@@ -3482,16 +3073,14 @@ SMODS.Edition({
         text = wee_description
     },
 	on_apply = function(card)
-		Q(function()
+		G.E_MANAGER:add_event(Event({blocking = false, blockable = false, func = function()
 			card:shrink(Jen.config.wee_sizemod)
-			return true
-		end, nil, nil, nil, false, false)
+		return true end}))
 	end,
 	on_remove = function(card)
-		Q(function()
+		G.E_MANAGER:add_event(Event({blocking = false, blockable = false, func = function()
 			card:grow(Jen.config.wee_sizemod)
-			return true
-		end, nil, nil, nil, false, false)
+		return true end}))
 	end,
     shader = false,
     discovered = true,
@@ -3532,10 +3121,9 @@ SMODS.Edition({
 		}
 	},
 	on_apply = function(card)
-		Q(function()
+		G.E_MANAGER:add_event(Event({blocking = false, blockable = false, func = function()
 			card:grow(Jen.config.wee_sizemod)
-			return true
-		end, nil, nil, nil, false, false)
+		return true end}))
 		local modifier = 100
 		local obj = card:gc()
 		if obj.set == 'Booster' or obj.jumbo_mod then
@@ -3551,10 +3139,9 @@ SMODS.Edition({
 		end
 	end,
 	on_remove = function(card)
-		Q(function()
+		G.E_MANAGER:add_event(Event({blocking = false, blockable = false, func = function()
 			card:shrink(Jen.config.wee_sizemod)
-			return true
-		end, nil, nil, nil, false, false)
+		return true end}))
 		local modifier = 100
 		local was_added = card.added_to_deck
 		if was_added then
@@ -4492,7 +4079,42 @@ SMODS.Edition{
 	end
 }
 
-
+--[[SMODS.Edition({
+    key = "unreal",
+    loc_txt = {
+        name = "Unreal",
+        label = "Unreal",
+        text = {
+            '{X:cry_twilight,C:cry_blossom,s:3}#1#{}3 Chips & Mult',
+			'{C:dark_edition,s:0.7,E:2}Shader by : Oiiman'
+        }
+    },
+	misc_badge = {
+		colour = G.C.CRY_ASCENDANT,
+		text = {
+			"Transcendent"
+		}
+	},
+    discovered = true,
+    unlocked = true,
+    shader = 'unreal',
+    config = { hyper_chips = {20, 3}, hyper_mult = {20, 3} },
+	sound = {
+		sound = 'jen_e_unreal',
+		per = 1,
+		vol = 0.7
+	},
+    in_shop = true,
+    weight = 0,
+    extra_cost = 6666,
+    apply_to_float = false,
+	get_weight = function(self)
+        return G.GAME.edition_rate * self.weight
+    end,
+    loc_vars = function(self)
+        return { vars = { '{20}' } }
+    end
+})]]
 
 local cs = Card.calculate_seal
 function Card:calculate_seal(context)
@@ -5173,12 +4795,12 @@ SMODS.Enhancement {
 	atlas = 'jenenhance',
 	calculate = function(self, card, context, effect)
 		if jl.sc(context) then
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', func = function()
 				local card2 = create_card('Planet', G.consumeables, nil, nil, nil, nil, nil, 'astro_card')
 				card2:add_to_deck()
 				G.consumeables:emplace(card2)
 				return true
-			end, nil, nil, 'after')
+			end }))
 		end
 	end
 }
@@ -5199,12 +4821,12 @@ SMODS.Enhancement {
 	discovered = true,
 	calculate = function(self, card, context, effect)
 		if jl.sc(context) then
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', func = function()
 				local card2 = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil, 'fortune_card')
 				card2:add_to_deck()
 				G.consumeables:emplace(card2)
 				return true
-			end, nil, nil, 'after')
+			end }))
 		end
 	end
 }
@@ -5225,12 +4847,12 @@ SMODS.Enhancement {
 	discovered = true,
 	calculate = function(self, card, context, effect)
 		if jl.sc(context) then
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', func = function()
 				local card2 = create_card('Spectral', G.consumeables, nil, nil, nil, nil, nil, 'osmium_card')
 				card2:add_to_deck()
 				G.consumeables:emplace(card2)
 				return true
-			end, nil, nil, 'after')
+			end }))
 		end
 	end
 }
@@ -5923,7 +5545,42 @@ SMODS.Joker {
 	end
 }
 
-
+--[[SMODS.Joker {
+	key = 'baal',
+	loc_txt = {
+		name = '{C:cry_verdant}Baal',
+		text = {
+			'When {C:attention}Straddle{} is about to progress,',
+			'there is a {C:green}#1#% chance{} for it to {C:attention}rewind progress{} instead',
+			'{C:inactive}(Cannot go below Straddle 0)',
+			' ',
+			caption('#2#'),
+			caption('#3#'),
+			faceart('raidoesthings'),
+			origin('Cult of the Lamb'),
+			au('Prophecy of the Broken Crowns')
+		}
+	},
+	pos = { x = 0, y = 0 },
+	soul_pos = { x = 1, y = 0 },
+	sinis = { x = 2, y = 0 },
+	cost = 50,
+	fusable = true,
+	rarity = 'cry_exotic',
+	unlocked = true,
+	discovered = true,
+	blueprint_compat = true,
+	eternal_compat = true,
+	perishable_compat = false,
+	atlas = 'jenaym',
+	unique = true,
+    loc_vars = function(self, info_queue, center)
+		local strength = aym_strength()
+        return {vars = {strength[1] == 0 and 'x' or string.rep('^', strength[1]), strength[2], Jen.sinister and '...pleaselordhavemercyonme...' or #SMODS.find_card('j_jen_narinder') > 0 and '...Fuck sake...' or 'Is *he* with you? I don\'t', (Jen.sinister or #SMODS.find_card('j_jen_narinder') > 0) and '' or 'want anything to do with you then.'}}
+    end,
+    calculate = function(self, card, context)
+	end
+}]]
 
 local clauneck_blurbs = {
 	"I bless thee!",
@@ -5993,14 +5650,12 @@ SMODS.Joker {
 			if ecs > 0 then
 				card_status_text(card, '!!!', nil, 0.05*card.T.h, G.C.DARK_EDITION, 0.6, 0.6, 2, 2, 'bm', 'jen_enlightened')
 				jl.th('all')
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 					play_sound('tarot1')
 					card:juice_up(0.8, 0.5)
 					G.TAROT_INTERRUPT_PULSE = true
-					return true
-				end, 0.2, nil, 'after')
-				jl.hcm('+', '+', true)
-				jl.hlv('+' .. number_format(card.ability.extra.levelup * ecs))
+				return true end }))
+				update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {chips = '+', mult = '+', StatusText = true, level='+' .. number_format(card.ability.extra.levelup * ecs)})
 				delay(1.3)
 				for k, v in pairs(G.GAME.hands) do
 					level_up_hand(v, k, true, card.ability.extra.levelup * ecs)
@@ -6009,7 +5664,7 @@ SMODS.Joker {
 					v.ability.perma_bonus = 0
 				end
 				jl.ch()
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 					local soul = create_card('Spectral', G.consumeables, nil, nil, nil, nil, 'c_soul', nil)
 					soul.no_forced_edition = true
 					soul:set_edition({negative = true})
@@ -6019,8 +5674,7 @@ SMODS.Joker {
 					soul:set_cost()
 					soul:add_to_deck()
 					G.consumeables:emplace(soul)
-					return true
-				end, 0.2, nil, 'after')
+				return true end }))
 			end
 			return nil, true
 		end
@@ -6480,69 +6134,69 @@ SMODS.Joker {
 					end
 					if jl.chance('jen_luke_tarot', 2.5, true) then
 						card:speak('+Tarot', G.C.SECONDARY_SET.Tarot)
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil, 'luke_tarot')
 							card2:add_to_deck()
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 							return true
-						end, 0.4, nil, 'after')
+						end }))
 					end
 					if jl.chance('jen_luke_spectral', 2.5, true) then
 						card:speak('+Spectral', G.C.SECONDARY_SET.Spectral)
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Spectral', G.consumeables, nil, nil, nil, nil, nil, 'luke_spectral')
 							card2:add_to_deck()
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 							return true
-						end, 0.4, nil, 'after')
+						end }))
 					end
 					if jl.chance('jen_luke_planet', 2.5, true) then
 						card:speak('+Planet', G.C.SECONDARY_SET.Planet)
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Planet', G.consumeables, nil, nil, nil, nil, nil, 'luke_planet')
 							card2:add_to_deck()
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 							return true
-						end, 0.4, nil, 'after')
+						end }))
 					end
 					if jl.chance('jen_luke_code', 2.5, true) then
 						card:speak('+Code', G.C.SET.Code)
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Code', G.consumeables, nil, nil, nil, nil, nil, 'luke_code')
 							card2:add_to_deck()
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 							return true
-						end, 0.4, nil, 'after')
+						end }))
 					end
 					if jl.chance('jen_luke_soul', 100, true) then
 						card:speak('+Soul', G.C.CRY_TWILIGHT)
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Spectral', G.consumeables, nil, nil, nil, nil, 'c_soul', 'luke_soul')
 							card2:add_to_deck()
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 							return true
-						end, 0.4, nil, 'after')
+						end }))
 					end
 					if jl.chance('jen_luke_gateway', 1000, true) then
 						card:speak('+Gateway', G.C.CRY_ASCENDANT)
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Spectral', G.consumeables, nil, nil, nil, nil, 'c_cry_gateway', 'luke_gateway')
 							card2:add_to_deck()
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 							return true
-						end, 0.4, nil, 'after')
+						end }))
 					end
 					return nil, true
 				end
@@ -6607,9 +6261,7 @@ SMODS.Joker {
     end,
     calculate = function(self, card, context)
 		if not context.blueprint and context.using_consumeable and context.consumeable and not (context.consumeable.edition or {}).negative and context.consumeable.ability.set == 'Code' and jl.njr(context) and (not context.consumeable.base or not context.consumeable.base.suit or not context.consumeable.base.value) then
-			if context.consumeable._saint_karma_done then return nil, true end
 			local quota = context.consumeable:getEvalQty()
-			context.consumeable._saint_karma_done = true
 			if not G.GAME.p03_codereq then G.GAME.p03_codereq = 3 end
 			card.ability.codes = card.ability.codes + quota
 			if card.ability.codes >= G.GAME.p03_codereq then
@@ -6618,7 +6270,7 @@ SMODS.Joker {
 					should_speak = true
 					card.ability.codes = card.ability.codes - G.GAME.p03_codereq
 					G.GAME.p03_codereq = math.min(1e7, math.ceil(G.GAME.p03_codereq ^ 1.3))
-					Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 						if card then
 							play_sound('jen_draw')
 							local pointer = create_card('Code', G.consumeables, nil, nil, nil, nil, 'c_cry_pointer', 'p03_pointer')
@@ -6626,8 +6278,7 @@ SMODS.Joker {
 							pointer:add_to_deck()
 							G.consumeables:emplace(pointer)
 						end
-						return true
-					end, 0.2, nil, 'after')
+					return true end }))
 				end
 			end
 			card_eval_status_text(card, 'extra', nil, nil, nil, {message = card.ability.codes .. ' / ' .. G.GAME.p03_codereq, colour = G.C.SET.Code})
@@ -6763,7 +6414,7 @@ SMODS.Joker {
 				card:speak('+' .. quota .. ' Boosters', G.C.DARK_EDITION)
 				card:speak(maxie_quotes.trigger, G.C.DARK_EDITION)
 				for i = 1, quota do
-					Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2/quota, func = function()
 						if card then
 							card:juice_up(0.8, 0.5)
 							local duplicate = create_card('Booster', G.consumeables, nil, nil, nil, nil, k, 'maxie_pack')
@@ -6774,12 +6425,11 @@ SMODS.Joker {
 							duplicate:add_to_deck()
 							G.consumeables:emplace(duplicate)
 						end
-						return true
-					end, 0.2/quota, nil, 'after')
+					return true end }))
 					if i <= quota/2 and jl.chance('maxie_voucherchance', 10, true) then
 						card:speak('+Voucher', G.C.EDITION)
 						card:speak(maxie_quotes.trigger, G.C.EDITION)
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2/quota, func = function()
 							if card then
 								card:juice_up(0.8, 0.5)
 								local duplicate = create_card('Voucher', G.consumeables, nil, nil, nil, nil, k, 'maxie_voucher')
@@ -6790,8 +6440,7 @@ SMODS.Joker {
 								duplicate:add_to_deck()
 								G.consumeables:emplace(duplicate)
 							end
-							return true
-						end, 0.2/quota, nil, 'after')
+						return true end }))
 					end
 				end
 			end
@@ -7184,8 +6833,8 @@ SMODS.Joker {
 				card.cumulative_qtys[card_key] = (card.cumulative_qtys[card_key] or 0) + quota
 				if jl.njr(context) then
 					card:speak(rin_blurbs, G.C.SET.Code)
-					Q(function()
-						Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 							if card then
 								if card.cumulative_qtys then
 									for k, v in pairs(card.cumulative_qtys) do
@@ -7201,10 +6850,8 @@ SMODS.Joker {
 									card.cumulative_qtys = nil
 								end
 							end
-							return true
-						end, 0.2, nil, 'after')
-						return true
-					end, 0.2, nil, 'after')
+						return true end }))
+					return true end }))
 				end
 				return nil, true
 			end
@@ -7269,8 +6916,8 @@ SMODS.Joker {
 			end
 			if jl.njr(context) then
 				card:speak(ayanami_blurbs, G.C.SECONDARY_SET.Planet)
-				Q(function()
-					Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 						if card then
 							if card.cumulative_qtys then
 								for k, v in pairs(card.cumulative_qtys) do
@@ -7301,10 +6948,8 @@ SMODS.Joker {
 								card.cumulative_blackholes = nil
 							end
 						end
-						return true
-					end, 0.2, nil, 'after')
-					return true
-				end, 0.2, nil, 'after')
+					return true end }))
+				return true end }))
 			end
 			return nil, true
 		end
@@ -7718,7 +7363,68 @@ local function kori_strength(power)
 	return { op = level, no = power + 3 }
 end
 
-
+--[[SMODS.Joker {
+	key = 'kori',
+	loc_txt = {
+		name = '{C:edition}K{C:dark_edition}o{C:edition}r{C:dark_edition}i {C:cry_ember}S{C:cry_blossom}i{C:cry_ember}n{C:cry_blossom}g{C:cry_ember}u{C:cry_blossom}l{C:cry_ember}a{C:cry_blossom}r{C:cry_ember}i{C:cry_blossom}s',
+		text = {
+			'{C:spectral}Black Holes{} give',
+			'{X:cry_ember,C:chips}?n{} Chips and {X:cry_azure,C:mult}?n{} Mult',
+			'to {C:attention}all hands{} when used',
+			'{C:inactive}(Scales according to number of Black Holes used in run)',
+			'{C:inactive}(Currently {C:cry_ascendant}#2#{C:cry_blossom}#3#{C:inactive})',
+			' ',
+			caption('#1#'),
+			faceart('astralightsky')
+		}
+	},
+	pos = { x = 0, y = 0 },
+	soul_pos = { x = 1, y = 0 },
+	drama = { x = 2, y = 0 },
+	fusable = true,
+	cost = 250,
+	rarity = 'jen_wondrous',
+	unlocked = true,
+	discovered = true,
+	blueprint_compat = true,
+	eternal_compat = true,
+	perishable_compat = false,
+	unique = true,
+	immutable = true,
+	debuff_immune = true,
+	atlas = 'jenkori',
+    loc_vars = function(self, info_queue, center)
+		local selected = kori_captions[Jen.gods() and 'marble' or Jen.dramatic and 'scared' or 'normal']
+		local strength = kori_strength(((((G.GAME or {}).consumeable_usage or {}).c_black_hole or {}).count or 0) + 1)
+        return {vars = {selected[math.random(#selected)], strength.op > 5 and ('{' .. strength.op .. '}') or strength.op > 1 and string.rep('^', strength.op-1) or 'x', number_format(strength.no)}}
+    end,
+	calculate = function(self, card, context)
+		if not context.blueprint_card and not context.destroying_card and not context.cry_ease_dollars and not context.post_trigger then
+			if context.jen_lving and context.card and context.card.gc and context.card:gc().key == 'c_black_hole' then
+				for i = 1, iterations do
+					local strength = kori_strength(((((G.GAME or {}).consumeable_usage or {}).c_black_hole or {}).count or 0) - (iterations - i))
+					G.GAME.hands[context.lv_hand].chips = to_big(G.GAME.hands[context.lv_hand].chips):arrow(3, 3)
+					G.GAME.hands[context.lv_hand].mult = to_big(G.GAME.hands[context.lv_hand].mult):arrow(3, 3)
+				end
+				if jl.njr(context)
+					if not context.lv_instant then 
+						delay(0.5)
+						Q(function() card:juice_up(2, 2) return true end)
+						play_sound_q('talisman_echip', 1)
+						play_sound_q('talisman_echip', 1.25)
+						play_sound_q('talisman_echip', 1.5)
+						play_sound_q('talisman_emult', 1)
+						play_sound_q('talisman_emult', 1.25)
+						play_sound_q('talisman_emult', 1.5)
+						jl.hcm('^^^3 (x' .. iterations .. ')', '^^^3 (x' .. iterations .. ')', true)
+						jl.hcm(G.GAME.hands[context.lv_hand].chips, G.GAME.hands[context.lv_hand].mult)
+						delay(0.5)
+					end
+				end
+			end
+		end
+	end
+}]]
 
 SMODS.Joker {
 	key = 'guilduryn',
@@ -8021,13 +7727,12 @@ SMODS.Joker {
 			if context.full_hand and #context.full_hand == 1 then
 				if context.full_hand[1]:get_id() == 7 and context.full_hand[1].ability.name == 'Steel Card' then
 					if card.ability.extra.axesharpness > 0 then
-						Q(function()
+						G.E_MANAGER:add_event(Event({func = function()
 							card:juice_up(0.8, 0.2)
 							G.GAME.blind:juice_up(3,3)
 							play_sound('slice1', 0.96+math.random()*0.08)
 							change_blind_size(1)
-							return true
-						end)
+						return true end }))
 						card.ability.extra.axesharpness = math.max(0, card.ability.extra.axesharpness - 1)
 						return true
 					else
@@ -8666,12 +8371,12 @@ function Card:open()
 		self.ability.extra = math.floor(orig)
 	end
 	cor(self)
-	Q(function()
+	G.E_MANAGER:add_event(Event({delay = 0.5, timer = 'REAL', func = function()
 		if poppins > 0 then
 			G.GAME.pack_choices = math.floor(self.ability.extra)
 		end
 		return true
-	end, 0.5, 'REAL')
+	end }))
 end
 
 local rai_desc = ((SMODS.Mods['sdm0sstuff'] or {}).can_load and
@@ -8848,7 +8553,70 @@ SMODS.Joker {
 	end
 }
 
+--[[
 
+SMODS.Joker {
+	key = 'math',
+	loc_txt = {
+		name = 'Math Mathew',
+		text = {
+			'Provides a base of {C:chips}#1# Chips{} and {C:mult}#2# Mult',
+			'Final amount is based on a {C:attention}mathematical operation',
+			'using the {C:attention}scored cards',
+			'{C:inactive}(Experiment with playing cards to learn more)'
+			"{C:inactive,s:1.8,E:1}Math is fun.",
+			faceart('jenwalter666')
+		}
+	},
+	config = {extra = {basechips = 500, basemult = 50}},
+	pos = { x = 0, y = 0 },
+	soul_pos = { x = 1, y = 0 },
+	cost = 20,
+	rarity = 4,
+	unlocked = true,
+	discovered = true,
+	blueprint_compat = false,
+	eternal_compat = true,
+	perishable_compat = false,
+	atlas = 'jenmath',
+    loc_vars = function(self, info_queue, center)
+        return {vars = {center.ability.extra.basechips, center.ability.extra.basemult}}
+    end,
+    calculate = function(self, card, context)
+		if not context.blueprint_card then
+			local equation = {
+				text = '',
+				add = {},
+				subtract = {},
+				multiply = {},
+				exponentiate = {}
+			}
+			if context.cardarea == G.jokers and not context.before and not context.after then
+				if #SMODS.find_card('j_jen_rai') > 0 and #SMODS.find_card('j_jen_koslo') > 0 then
+					return {
+						message = '^1e100 Mult',
+						Emult_mod = 1e100,
+						colour = G.C.DARK_EDITION
+					}
+				elseif #SMODS.find_card('j_jen_rai') > 0 or #SMODS.find_card('j_jen_koslo') > 0 then
+					return {
+						message = 'x777',
+						Xchip_mod = 777,
+						colour = G.C.CHIPS
+					}
+				else
+					return {
+						message = '+1',
+						chip_mod = 1,
+						colour = G.C.CHIPS
+					}
+				end
+			end
+		end
+	end
+}
+
+]]
 
 local function landa_mod()
 	if not G.jokers or not G.deck then return 1 end
@@ -8900,7 +8668,51 @@ SMODS.Joker {
 	end
 }
 
-
+-- Currently unused, has identical functionality to Landa Veris
+--[[SMODS.Joker {
+	key = 'urizyth',
+	loc_txt = {
+		name = 'Urizyth',
+		text = {
+			'Gives {X:purple,C:dark_edition}^Chips&Mult{} according',
+			'to {C:attention}(number of Jokers + 1){} multiplied by',
+			'{C:attention}((cards in deck / 100) + 1)',
+			'{C:inactive}(Currently {X:purple,C:dark_edition}^#1#{C:inactive})',
+			' ',
+			caption('#2#'),
+			faceart('laviolive')
+		}
+	},
+	pos = { x = 0, y = 0 },
+	soul_pos = { x = 1, y = 0 },
+	sinis = { x = 2, y = 0 },
+	cost = 50,
+	rarity = 'cry_exotic',
+	fusable = true,
+	unlocked = true,
+	discovered = true,
+	blueprint_compat = true,
+	eternal_compat = true,
+	perishable_compat = false,
+	wee_incompatible = true,
+	immutable = true,
+	atlas = 'jenlanda',
+    loc_vars = function(self, info_queue, center)
+        return {vars = {number_format(landa_mod()), Jen.sinister and 'OH GOD, OH NO, OH FU-!!' or Jen.gods() and 'That... thing... have I seen it before?' or 'I must do what I must-... w-wait, was that REALLY my line?'}}
+    end,
+    calculate = function(self, card, context)
+		if context.cardarea == G.jokers and context.joker_main then
+			local mod = landa_mod()
+			return {
+				message = '^' .. mod .. ' Chips & Mult',
+				Echip_mod = mod,
+				Emult_mod = mod,
+				colour = G.C.PURPLE,
+				card = card
+			}, true
+		end
+	end
+}]]
 
 local agares_blurbs = {
 	'Go, Darkclaw!',
@@ -8952,8 +8764,8 @@ SMODS.Joker {
 				card.cumulative_qtys[card_key] = (card.cumulative_qtys[card_key] or 0) + quota
 				if jl.njr(context) then
 					card:speak(agares_blurbs, G.C.SECONDARY_SET.Spectral)
-					Q(function()
-						Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 							if card then
 								if card.cumulative_qtys then
 									for k, v in pairs(card.cumulative_qtys) do
@@ -8971,10 +8783,8 @@ SMODS.Joker {
 									card.cumulative_qtys = nil
 								end
 							end
-							return true
-						end, 0.2, nil, 'after')
-						return true
-					end, 0.2, nil, 'after')
+						return true end }))
+					return true end }))
 				end
 				return nil, true
 			end
@@ -9022,8 +8832,8 @@ SMODS.Joker {
 				card.cumulative_qtys[card_key] = (card.cumulative_qtys[card_key] or 0) + quota
 				if jl.njr(context) then
 					card_eval_status_text(card, 'extra', nil, nil, nil, {message = 'Whack!', colour = G.C.SECONDARY_SET.Tarot})
-					Q(function()
-						Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 							if card then
 								if card.cumulative_qtys then
 									for k, v in pairs(card.cumulative_qtys) do
@@ -9040,10 +8850,8 @@ SMODS.Joker {
 									card.cumulative_qtys = nil
 								end
 							end
-							return true
-						end, 0.2, nil, 'after')
-						return true
-					end, 0.2, nil, 'after')
+						return true end }))
+					return true end }))
 				end
 				return nil, true
 			end
@@ -10570,35 +10378,6 @@ SMODS.Joker {
 	end,
     calculate = function(self, card, context)
 		if not context.blueprint and jl.njr(context) then
-			-- Pre-play behavior: discard cards to the left of the left hand when play is pressed
-			if context.press_play and card.ability.active then
-				local lh = jl.fc and jl.fc('j_jen_goob_lefthand', 'hand') or nil
-				if lh and G and G.hand and G.hand.cards then
-					local did_discard = false
-					for i = 1, #G.hand.cards do
-						local tar = G.hand.cards[i]
-						if tar then
-							if tar == lh then
-								break
-							else
-								if not tar.highlighted and tar:xpos() < lh:xpos() then
-									if not did_discard then
-										did_discard = true
-										if goob_blurbs and goob_blurbs.discard then
-											card:speak(goob_blurbs.discard, G.C.RED)
-										end
-									end
-									draw_card(G.hand, G.discard, 100, 'down', false, tar)
-									Q(function()
-										play_sound('tarot1')
-										if lh.juice_up then lh:juice_up(0.5, 0.8) end
-									return true end)
-								end
-							end
-						end
-					end
-				end
-			end
 			if context.setting_blind and not Jen.goob_busy then
 				Jen.goob_busy = true
 				local leftie = jl.fc('j_jen_goob_lefthand', 'all')
@@ -10952,7 +10731,7 @@ local lusr = level_up_suit
 function level_up_suit(card, suit, instant, amount, dontautoclear)
     amount = to_big(amount or 1)
 	if not instant then
-		jl.h(localize(suit, 'suits_plural'), G.GAME.suits[suit].chips, G.GAME.suits[suit].mult, G.GAME.suits[suit].level)
+		update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 0.3}, {handname=localize(suit, 'suits_plural'),chips = G.GAME.suits[suit].chips, mult = G.GAME.suits[suit].mult, level=G.GAME.suits[suit].level})
 	end
 	if lusr then lusr(card, suit, instant, amount) end
     G.GAME.suits[suit].level = math.max(G.GAME.suits[suit].level + amount, 0)
@@ -10964,34 +10743,30 @@ function level_up_suit(card, suit, instant, amount, dontautoclear)
 	end
     if not instant then
 		if (G.SETTINGS.FASTFORWARD or 0) > 0 then
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
 				G.TAROT_INTERRUPT_PULSE = true
-				return true
-			end, 0.2, nil, 'after')
-			jl.h(localize(suit, 'suits_plural'), G.GAME.suits[suit].chips, G.GAME.suits[suit].mult, G.GAME.suits[suit].level, true)
+				return true end }))
+			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {chips = G.GAME.suits[suit].chips, mult = G.GAME.suits[suit].mult, level=G.GAME.suits[suit].level, StatusText = true})
 		else
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
 				G.TAROT_INTERRUPT_PULSE = true
-				return true
-			end, 0.2, nil, 'after')
-			jl.hm(G.GAME.suits[suit].mult, true)
-			Q(function()
+				return true end }))
+			update_hand_text({delay = 0}, {mult = G.GAME.suits[suit].mult, StatusText = true})
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
-				return true
-			end, 0.9, nil, 'after')
-			jl.hc(G.GAME.suits[suit].chips, true)
-			Q(function()
+				return true end }))
+			update_hand_text({delay = 0}, {chips = G.GAME.suits[suit].chips, StatusText = true})
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
 				G.TAROT_INTERRUPT_PULSE = nil
-				return true
-			end, 0.9, nil, 'after')
-			jl.hlv(G.GAME.suits[suit].level)
+				return true end }))
+			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {level=G.GAME.suits[suit].level})
 		end
         delay(1.3)
 		if not dontautoclear then jl.ch() end
@@ -11003,7 +10778,7 @@ local lurr = level_up_rank
 function level_up_rank(card, rank, instant, amount, dontautoclear)
     amount = to_big(amount or 1)
 	if not instant then
-		jl.h(rank .. 's', G.GAME.ranks[rank].chips, G.GAME.ranks[rank].mult, G.GAME.ranks[rank].level)
+		update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 0.3}, {handname=rank .. 's',chips = G.GAME.ranks[rank].chips, mult = G.GAME.ranks[rank].mult, level=G.GAME.ranks[rank].level})
 	end
 	if lurr then lurr(card, rank, instant, amount) end
     G.GAME.ranks[rank].level = math.max(G.GAME.ranks[rank].level + amount, 0)
@@ -11015,57 +10790,47 @@ function level_up_rank(card, rank, instant, amount, dontautoclear)
 	end
     if not instant then
 		if (G.SETTINGS.FASTFORWARD or 0) > 0 then
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
 				G.TAROT_INTERRUPT_PULSE = true
-				return true
-			end, 0.2, nil, 'after')
-			jl.h(rank .. 's', G.GAME.ranks[rank].chips, G.GAME.ranks[rank].mult, G.GAME.ranks[rank].level, true)
+				return true end }))
+			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {chips = G.GAME.ranks[rank].chips, mult = G.GAME.ranks[rank].mult, level=G.GAME.ranks[rank].level, StatusText = true})
 		else
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
 				G.TAROT_INTERRUPT_PULSE = true
-				return true
-			end, 0.2, nil, 'after')
-			jl.hm(G.GAME.ranks[rank].mult, true)
-			Q(function()
+				return true end }))
+			update_hand_text({delay = 0}, {mult = G.GAME.ranks[rank].mult, StatusText = true})
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
-				return true
-			end, 0.9, nil, 'after')
-			jl.hc(G.GAME.ranks[rank].chips, true)
-			Q(function()
+				return true end }))
+			update_hand_text({delay = 0}, {chips = G.GAME.ranks[rank].chips, StatusText = true})
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
 				G.TAROT_INTERRUPT_PULSE = nil
-				return true
-			end, 0.9, nil, 'after')
-			jl.hlv(G.GAME.ranks[rank].level)
+				return true end }))
+			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {level=G.GAME.ranks[rank].level})
 		end
         delay(1.3)
 		if not dontautoclear then jl.ch() end
     end
 end
 
--- Store reference to original level_up_hand function before we override it
-local luhr = _G.level_up_hand
+local luhr = level_up_hand
 function level_up_hand(card, hand, instant, amount, no_astronomy, no_astronomy_omega, no_jokers)
 	amount = to_big(amount)
-	
-	-- Performance optimization: Skip expensive operations when called from Black Hole
-	local is_black_hole_call = (card and card.ability and card.ability.name == 'Black Hole') or 
-							   (G.GAME and G.GAME._black_hole_processing)
-	
-	if not no_astronomy and to_big(amount) > to_big(0) and not is_black_hole_call then
+	if not no_astronomy and to_big(amount) > to_big(0) then
 			if Jen.hv('astronomy', 9) then
 				amount = amount * 5
 			elseif Jen.hv('astronomy', 8) then
 				amount = amount * 2
 			end
 		end
-	if to_big(amount) > to_big(0) and not is_black_hole_call then
+	if to_big(amount) > to_big(0) then
 		if #SMODS.find_card('j_jen_guilduryn') > 0 and hand ~= jl.favhand() then
 			for k, v in ipairs(G.jokers.cards) do
 				if (G.SETTINGS.STATUSTEXT or 0) < 1 and v.gc and v:gc().key == 'j_jen_guilduryn' then
@@ -11080,26 +10845,26 @@ function level_up_hand(card, hand, instant, amount, no_astronomy, no_astronomy_o
 		end
 	end
 	luhr(card, hand, instant, amount)
-	if to_big(amount) > to_big(0) and not is_black_hole_call then
+	if to_big(amount) > to_big(0) then
 		add_malice(25 * amount)
 	end
 	manage_level_colour(G.GAME.hands[hand].level)
-	if not no_jokers and not is_black_hole_call then
+	if not no_jokers then
 		jl.jokers({jen_lving = true, lvs = amount, lv_hand = hand, lv_instant = instant, card = card})
 	end
-	if to_big(amount) < to_big(0) and Jen.hv('astronomy', 11) and not no_astronomy and not is_black_hole_call then
+	if to_big(amount) < to_big(0) and Jen.hv('astronomy', 11) and not no_astronomy then
 	        local refund = math.abs(amount) / 4
 	        local fav = jl.favhand()
 	        if Jen.config.verbose_astronomicon then jl.th(fav) end
 	        fastlv(card, fav, not Jen.config.verbose_astronomicon, refund, true)
 	    end
-	    if to_big(amount) > to_big(0) and Jen.hv('astronomy', 12) and not no_astronomy and not is_black_hole_call then
+	    if to_big(amount) > to_big(0) and Jen.hv('astronomy', 12) and not no_astronomy then
 	        local dividend = amount / 10
 	        local fav = jl.favhand()
 	        if Jen.config.verbose_astronomicon then jl.th(fav) end
 	        fastlv(card, fav, not Jen.config.verbose_astronomicon, dividend, true)
 	    end
-		if Jen.hv('astronomy', 13) and to_big(amount) >= to_big(1) and not no_astronomy_omega and not is_black_hole_call then
+		if Jen.hv('astronomy', 13) and to_big(amount) >= to_big(1) and not no_astronomy_omega then
 			local pos = jl.handpos(hand)
 			--local edi = ((card or {}).edition or {}).key or 'e_base'
 			--if edi == 'e_negative' then edi = 'e_base' end
@@ -11751,9 +11516,12 @@ SMODS.Consumable {
 				if ecs > 0 then
 					card_status_text(card, '!!!', nil, 0.05*card.T.h, G.C.DARK_EDITION, 0.6, 0.6, 2, 2, 'bm', 'jen_enlightened')
 					jl.th('all')
-					Q(function() play_sound('tarot1'); card:juice_up(0.8, 0.5); G.TAROT_INTERRUPT_PULSE = true; return true end, 0.2, nil, 'after')
-					jl.hcm('+', '+', true)
-					jl.hlv('+' .. number_format(card.ability.extra.levelup * ecs))
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+						play_sound('tarot1')
+						card:juice_up(0.8, 0.5)
+						G.TAROT_INTERRUPT_PULSE = true
+					return true end }))
+					update_hand_text({sound = 'button', volume = 0.7, pitch = 0.9, delay = 0}, {chips = '+', mult = '+', StatusText = true, level='+' .. number_format(card.ability.extra.levelup * ecs)})
 					delay(1.3)
 					for k, v in pairs(G.GAME.hands) do
 						fastlv(v, k, true, card.ability.extra.levelup * ecs)
@@ -11762,8 +11530,8 @@ SMODS.Consumable {
 					for k, v in pairs(e100cards) do
 						v.ability.perma_bonus = 0
 					end
-					Q(function()
-						local soul = jl.card('c_soul')
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+						local soul = create_card('Spectral', G.consumeables, nil, nil, nil, nil, 'c_soul', nil)
 						soul.no_forced_edition = true
 						soul:set_edition({negative = true})
 						soul.no_forced_edition = nil
@@ -11772,8 +11540,7 @@ SMODS.Consumable {
 						soul:set_cost()
 						soul:add_to_deck()
 						G.consumeables:emplace(soul)
-						return true
-					end, 0.2, nil, 'after')
+					return true end }))
 				end
 				return nil, true
 			end
@@ -11856,31 +11623,53 @@ SMODS.Consumable {
 								fastlv(v, hand, nil, levels)
 								G.GAME.hands[hand].chips = ((G.GAME.hands[hand].chips + addchips) * xchips) ^ echips
 								G.GAME.hands[hand].mult = ((G.GAME.hands[hand].mult + addmult) * xmult) ^ emult
-								Q(function() play_sound('chips1'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('chips1')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = '+' .. tostring(addchips), StatusText = true})
-								Q(function() play_sound('talisman_xchip'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_xchip')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = 'x' .. tostring(xchips), StatusText = true})
-								Q(function() play_sound('talisman_echip'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_echip')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = '^' .. tostring(jl.round(echips, 3)), StatusText = true})
-								Q(function() play_sound('multhit1'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('multhit1')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = '+' .. tostring(addmult), StatusText = true})
-								Q(function() play_sound('multhit2'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('multhit2')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = 'x' .. tostring(xmult), StatusText = true})
-								Q(function() play_sound('talisman_emult', 1); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_emult', 1)
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = '^' .. tostring(jl.round(emult, 3)), StatusText = true})
 							end
 						end
 					end
 					if fastforward then
-						Q(function() play_sound('button'); return true end, 0.3, nil, 'after')
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+							play_sound('button')
+						return true end }))
 						update_hand_text({delay = 1.3}, {chips = '+++', mult = '+++', level = '+++', StatusText = true})
 					end
 					update_hand_text({sound = 'button', volume = 0.5, pitch = 1.1, delay = 3}, {handname=localize(hand, 'poker_hands'),chips = G.GAME.hands[hand].chips, mult = G.GAME.hands[hand].mult, level=G.GAME.hands[hand].level})
 				end
-				Q(function()
-					for k, v in pairs(targets) do v:remove() end
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.5, func = function()
+					for k, v in pairs(targets) do
+						v:remove()
+					end
 					return true
-				end, 0.5, nil, 'after')
+				end}))
 			else
 				card_eval_status_text(card, 'extra', nil, nil, nil, {message = 'Nothing to devour!', colour = G.C.MULT})
 			end
@@ -12002,33 +11791,53 @@ SMODS.Consumable {
 								fastlv(v, hand, nil, levels)
 								G.GAME.hands[hand].chips = ((G.GAME.hands[hand].chips + addchips) * xchips) ^ echips
 								G.GAME.hands[hand].mult = ((G.GAME.hands[hand].mult + addmult) * xmult) ^ emult
-								Q(function() play_sound('chips1'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('chips1')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = '+' .. tostring(addchips), StatusText = true})
-								Q(function() play_sound('chips1'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_xchip')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = 'x' .. tostring(xchips), StatusText = true})
-								Q(function() play_sound('talisman_xchip'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_echip')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = '^' .. tostring(jl.round(echips, 3)), StatusText = true})
-								Q(function() play_sound('multhit1'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('multhit1')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = '+' .. tostring(addmult), StatusText = true})
-								Q(function() play_sound('multhit2'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('multhit2')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = 'x' .. tostring(xmult), StatusText = true})
-								Q(function() play_sound('talisman_emult', 1); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_emult', 1)
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = '^' .. tostring(jl.round(emult, 3)), StatusText = true})
 							end
 						end
 					end
 					if fastforward then
-						Q(function() play_sound('button'); return true end, 0.3, nil, 'after')
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+							play_sound('button')
+						return true end }))
 						update_hand_text({delay = 1.3}, {chips = '+++', mult = '+++', level = '+++', StatusText = true})
 					end
 					update_hand_text({sound = 'button', volume = 0.5, pitch = 1.1, delay = 3}, {handname=localize(hand, 'poker_hands'),chips = G.GAME.hands[hand].chips, mult = G.GAME.hands[hand].mult, level=G.GAME.hands[hand].level})
 				end
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.5, func = function()
 					for k, v in pairs(targets) do
 						v:remove()
 					end
 					return true
-				end, 0.5, nil, 'after')
+				end}))
 			else
 				card_eval_status_text(card, 'extra', nil, nil, nil, {message = 'Nothing to devour!', colour = G.C.MULT})
 			end
@@ -12179,33 +11988,53 @@ SMODS.Consumable {
 								fastlv(v, hand, nil, levels)
 								G.GAME.hands[hand].chips = ((G.GAME.hands[hand].chips + addchips) * xchips) ^ echips
 								G.GAME.hands[hand].mult = ((G.GAME.hands[hand].mult + addmult) * xmult) ^ emult
-								Q(function() play_sound('chips1'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('chips1')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = '+' .. tostring(addchips), StatusText = true})
-								Q(function() play_sound('talisman_xchip'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_xchip')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = 'x' .. tostring(xchips), StatusText = true})
-								Q(function() play_sound('talisman_echip'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_echip')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {chips = '^' .. tostring(jl.round(echips, 3)), StatusText = true})
-								Q(function() play_sound('multhit1'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('multhit1')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = '+' .. tostring(addmult), StatusText = true})
-								Q(function() play_sound('multhit2'); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('multhit2')
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = 'x' .. tostring(xmult), StatusText = true})
-								Q(function() play_sound('talisman_emult', 1); v:juice_up(0.8, 0.5); return true end, 0.3, nil, 'after')
+								G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+									play_sound('talisman_emult', 1)
+									v:juice_up(0.8, 0.5)
+								return true end }))
 								update_hand_text({delay = 1.3}, {mult = '^' .. tostring(jl.round(emult, 3)), StatusText = true})
 							end
 						end
 					end
 					if fastforward then
-						Q(function() play_sound('button'); return true end, 0.3, nil, 'after')
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+							play_sound('button')
+						return true end }))
 						update_hand_text({delay = 1.3}, {chips = '+++', mult = '+++', level = '+++', StatusText = true})
 					end
 					update_hand_text({sound = 'button', volume = 0.5, pitch = 1.1, delay = 3}, {handname=localize(hand, 'poker_hands'),chips = G.GAME.hands[hand].chips, mult = G.GAME.hands[hand].mult, level=G.GAME.hands[hand].level})
 				end
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.5, func = function()
 					for k, v in pairs(targets) do
 						v:remove()
 					end
 					return true
-				end, 0.5, nil, 'after')
+				end}))
 			else
 				card_eval_status_text(card, 'extra', nil, nil, nil, {message = 'Nothing to devour!', colour = G.C.MULT})
 			end
@@ -12629,8 +12458,8 @@ SMODS.Consumable {
 					card.cumulative_qtys[card_key] = (card.cumulative_qtys[card_key] or 0) + quota
 					if jl.njr(context) then
 						card_eval_status_text(card, 'extra', nil, nil, nil, {message = '. . .', colour = G.C.CRY_EMBER})
-						Q(function()
-							Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+							G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 								if card then
 									if card.cumulative_qtys then
 										for k, v in pairs(card.cumulative_qtys) do
@@ -12648,11 +12477,9 @@ SMODS.Consumable {
 										card.cumulative_qtys = nil
 									end
 								end
-								return true
-							end, 0.2, nil, 'after')
-							return true
-						end, 0.2, nil, 'after')
-						Q(function()
+							return true end }))
+						return true end }))
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 							if card then
 								local duplicate = create_card('Booster', G.consumeables, nil, nil, nil, nil, k, 'charred_pack')
 								if duplicate.gc and duplicate:gc().set ~= 'Booster' then
@@ -12662,9 +12489,8 @@ SMODS.Consumable {
 								duplicate:add_to_deck()
 								G.consumeables:emplace(duplicate)
 							end
-							return true
-						end, 0.2, nil, 'after')
-						Q(function()
+						return true end }))
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 							if card then
 								local duplicate = create_card('Voucher', G.consumeables, nil, nil, nil, nil, k, 'charred_voucher')
 								if duplicate.gc and duplicate:gc().set ~= 'Voucher' then
@@ -12674,8 +12500,7 @@ SMODS.Consumable {
 								duplicate:add_to_deck()
 								G.consumeables:emplace(duplicate)
 							end
-							return true
-						end, 0.2, nil, 'after')
+						return true end }))
 					end
 					return nil, true
 				end
@@ -12887,23 +12712,19 @@ local inhabited_quotes = {
 			if not context.cry_ease_dollars and not context.post_trigger and context.jen_lving then
 				if to_big(context.lvs) > to_big(0) then
 					local iterations = math.min(1e3, to_number(context.lvs))
-					jen_start_wg_job({
-						hand_key = context.lv_hand,
-						op = 2,
-						operand = 2,
-						iterations = iterations,
-						batch_size = 50, -- Increased from 25 for better performance
-						card = card,
-						lv_instant = context.lv_instant,
-						label = '^^2'
-					})
-					-- UI ping removed for performance optimization
-					-- Q(function()
-					-- 	card:juice_up(0.6, 0.8)
-					-- 	card_eval_status_text(card, 'extra', nil, nil, nil, {message = 'WG ^^2', colour = G.C.FILTER})
-					-- 	play_sound('jen_misc1')
-					-- return true end)
-					-- totalling tracked per job key inside queue
+					for i = 1, iterations do
+						G.GAME.hands[context.lv_hand].chips = to_big(G.GAME.hands[context.lv_hand].chips):arrow(2, 2)
+						G.GAME.hands[context.lv_hand].mult = to_big(G.GAME.hands[context.lv_hand].mult):arrow(2, 2)
+					end
+					if not context.lv_instant then
+						delay(0.5)
+						Q(function() card:juice_up(1, 1) return true end)
+						play_sound_q('talisman_eechip')
+						play_sound_q('talisman_eemult')
+						jl.hcm('^^2 (x' .. iterations .. ')', '^^2 (x' .. iterations .. ')', true)
+						jl.hcm(G.GAME.hands[context.lv_hand].chips, G.GAME.hands[context.lv_hand].mult)
+						delay(0.5)
+					end
 				end
 				return nil, true
 			end
@@ -12944,23 +12765,19 @@ local inhabited_quotes = {
 			if not context.cry_ease_dollars and not context.post_trigger and context.jen_lving then
 				if to_big(context.lvs) > to_big(0) then
 					local iterations = math.min(1e3, to_number(context.lvs))
-					jen_start_wg_job({
-						hand_key = context.lv_hand,
-						op = 3,
-						operand = 3,
-						iterations = iterations,
-						batch_size = 25, -- Increased from 10 for better performance
-						card = card,
-						lv_instant = context.lv_instant,
-						label = '^^^3'
-					})
-					-- UI ping removed for performance optimization
-					-- Q(function()
-					-- 	card:juice_up(0.9, 1.2)
-					-- 	card_eval_status_text(card, 'extra', nil, nil, nil, {message = 'WG ^^^3', colour = G.C.FILTER})
-					-- 	play_sound('jen_misc1')
-					-- return true end)
-					-- totalling tracked per job key inside queue
+					for i = 1, iterations do
+						G.GAME.hands[context.lv_hand].chips = to_big(G.GAME.hands[context.lv_hand].chips):arrow(3, 3)
+						G.GAME.hands[context.lv_hand].mult = to_big(G.GAME.hands[context.lv_hand].mult):arrow(3, 3)
+					end
+					if not context.lv_instant then 
+						delay(0.5)
+						Q(function() card:juice_up(2, 2) return true end)
+						play_sound_q('talisman_eeechip')
+						play_sound_q('talisman_eeemult')
+						jl.hcm('^^^3 (x' .. iterations .. ')', '^^^3 (x' .. iterations .. ')', true)
+						jl.hcm(G.GAME.hands[context.lv_hand].chips, G.GAME.hands[context.lv_hand].mult)
+						delay(0.5)
+					end
 				end
 				return nil, true
 			end
@@ -13093,36 +12910,6 @@ end
 
 local dissolve_ref = Card.start_dissolve
 function Card:start_dissolve(dissolve_colours, silent, dissolve_time_fac, no_juice)
-	-- Check if this is a Joker being destroyed and if "The Saint" is active
-	if self.ability and self.ability.set == 'Joker' and G.jokers then
-		-- Check if this Joker is currently in the jokers area or if it's being destroyed by Gateway
-		local is_in_jokers_area = (self.area == G.jokers)
-		local is_being_destroyed_by_gateway = (G.GAME and G.GAME.gateway_destroying_jokers)
-		
-		-- Only check for protection if the Joker is in the jokers area OR if Gateway is destroying it
-		if is_in_jokers_area or is_being_destroyed_by_gateway then
-			local saint_active = false
-			for i = 1, #G.jokers.cards do
-				local joker = G.jokers.cards[i]
-				if joker.ability and joker.ability.set == 'Joker' and 
-				   (joker:gc().key == 'j_jen_saint' or joker:gc().key == 'j_jen_saint_attuned') then
-					saint_active = true
-					break
-				end
-			end
-			
-			-- If "The Saint" is active and this is being destroyed by Gateway, prevent destruction
-			if saint_active and is_being_destroyed_by_gateway then
-				-- Show protection message
-				card_status_text(self, 'Protected by The Saint', nil, 0.05*self.T.h, G.C.PALE_GREEN, 0.8, 0.6, 1, 1, 'bm', 'jen_enlightened', 0.8, 1)
-				-- Don't destroy the Joker, just return
-				return
-			elseif saint_active and not is_being_destroyed_by_gateway then
-			elseif not saint_active and is_being_destroyed_by_gateway then
-			end
-		end
-	end
-	
 	if self.true_dissolve then
 		if self.gc and self:gc().key ~= 'j_jen_kosmos' and self.ability.set ~= 'jen_ability' and self.sell_cost > 0 and not G.screenwipe then
 			add_malice(self.sell_cost * 3)
@@ -13462,7 +13249,51 @@ G.FUNCS.use_card = function(e, mute, nosave)
 	gfucr(e, mute, nosave)
 end
 
-
+--TAGS
+--[[
+SMODS.Tag {
+	key = 'solace',
+	loc_txt = {
+		name = 'Solace Tag',
+		text = {
+			'Immediately uses {C:spectral}Solace'
+		}
+	},
+	pos = { x = 6, y = 2 },
+	config = { type = "new_blind_choice" },
+	atlas = "jentags",
+	loc_vars = function(self, info_queue)
+		local tar = (self.ability or {}).pack_key or '
+		return ((self.ability or {})
+	end,
+	in_pool = function()
+		return false
+	end,
+	apply = function(tag, context)
+		if context.type == "new_blind_choice" then
+			tag:yep("+", G.C.almanac, function()
+				local key = "p_cry_code_normal_" .. math.random(1, 2)
+				local card = Card(
+					G.play.T.x + G.play.T.w / 2 - G.CARD_W * 1.27 / 2,
+					G.play.T.y + G.play.T.h / 2 - G.CARD_H * 1.27 / 2,
+					G.CARD_W * 1.27,
+					G.CARD_H * 1.27,
+					G.P_CARDS.empty,
+					G.P_CENTERS[key],
+					{ bypass_discovery_center = true, bypass_discovery_ui = true }
+				)
+				card.cost = 0
+				card.from_tag = true
+				G.FUNCS.use_card({ config = { ref_table = card } })
+				card:start_materialize()
+				return true
+			end)
+			tag.triggered = true
+			return true
+		end
+	end,
+}
+]]
 
 --CONSUMABLES
 for k, v in pairs(blank_types) do
@@ -13597,16 +13428,19 @@ SMODS.Consumable {
 	use = function(self, card, area, copier)
 		for k, v in pairs(G.GAME.consumeable_usage) do
 			if k ~= 'c_jen_reverse_fool' and k ~= 'c_cry_pointer' and not string.find(k, '_omega') and not string.find(k, 'jen_cheat') then
-				Q(function()
-					local neg = create_card(v.set, G.consumeables, nil, nil, nil, nil, k, nil)
-					neg.no_forced_edition = true
-					neg:set_edition({negative = true})
-					neg.no_forced_edition = nil
-					neg:setQty(v.count)
-					neg:add_to_deck()
-					G.consumeables:emplace(neg)
-					return true
-				end, 0.1)
+				G.E_MANAGER:add_event(Event({
+					delay = 0.1,
+					func = function()
+						local neg = create_card(v.set, G.consumeables, nil, nil, nil, nil, k, nil)
+						neg.no_forced_edition = true
+						neg:set_edition({negative = true})
+						neg.no_forced_edition = nil
+						neg:setQty(v.count)
+						neg:add_to_deck()
+						G.consumeables:emplace(neg)
+						return true
+					end
+				}))
 			end
 		end
 		add_malice(math.max(5000, get_malice()))
@@ -13615,16 +13449,19 @@ SMODS.Consumable {
 	bulk_use = function(self, card, area, copier, number)
 		for k, v in pairs(G.GAME.consumeable_usage) do
 			if k ~= 'c_jen_reverse_fool' and not string.find(k, '_omega') then
-				Q(function()
-					local neg = create_card(v.set, G.consumeables, nil, nil, nil, nil, k, nil)
-					neg.no_forced_edition = true
-					neg:set_edition({negative = true})
-					neg.no_forced_edition = nil
-					neg:setQty(v.count * number)
-					neg:add_to_deck()
-					G.consumeables:emplace(neg)
-					return true
-				end, 0.1)
+				G.E_MANAGER:add_event(Event({
+					delay = 0.1,
+					func = function()
+						local neg = create_card(v.set, G.consumeables, nil, nil, nil, nil, k, nil)
+						neg.no_forced_edition = true
+						neg:set_edition({negative = true})
+						neg.no_forced_edition = nil
+						neg:setQty(v.count * number)
+						neg:add_to_deck()
+						G.consumeables:emplace(neg)
+						return true
+					end
+				}))
 			end
 		end
 		add_malice(math.max(5000 * number, get_malice() * (2^number)))
@@ -13637,19 +13474,22 @@ local function createfulldeck(enhancement, edition, amount, emplacement)
 	for k, v in pairs(G.P_CARDS) do
 		local front = v
 		for i = 1, (amount or 1) do
-			Q(function()
-				cards[i] = true
-				G.playing_card = (G.playing_card and G.playing_card + 1) or 1
-				local card = Card(G.play.T.x + G.play.T.w/2, G.play.T.y, G.CARD_W, G.CARD_H, v, enhancement or G.P_CENTERS.c_base, {playing_card = G.playing_card})
-				if edition then
-					card:set_edition(type(edition) == 'table' and edition or {[edition] = true}, true, true)
+			G.E_MANAGER:add_event(Event({
+				delay = 0.1,
+				func = function()
+					cards[i] = true
+					G.playing_card = (G.playing_card and G.playing_card + 1) or 1
+					local card = Card(G.play.T.x + G.play.T.w/2, G.play.T.y, G.CARD_W, G.CARD_H, v, enhancement or G.P_CENTERS.c_base, {playing_card = G.playing_card})
+					if edition then
+						card:set_edition(type(edition) == 'table' and edition or {[edition] = true}, true, true)
+					end
+					play_sound('card1')
+					table.insert(G.playing_cards, card)
+					card:add_to_deck()
+					if emplacement then emplacement:emplace(card) else G.deck:emplace(card) end
+					return true
 				end
-				play_sound('card1')
-				table.insert(G.playing_cards, card)
-				card:add_to_deck()
-				if emplacement then emplacement:emplace(card) else G.deck:emplace(card) end
-				return true
-			end, 0.1)
+			}))
 		end
 	end
 	Q(function()
@@ -13666,19 +13506,22 @@ local function createcardset(needle, enhancement, edition, amount, emplacement)
 		if string.find(k, needle) then
 			local front = v
 			for i = 1, (amount or 1) do
-				Q(function()
-					cards[i] = true
-					G.playing_card = (G.playing_card and G.playing_card + 1) or 1
-					local card = Card(G.play.T.x + G.play.T.w/2, G.play.T.y, G.CARD_W, G.CARD_H, v, enhancement or G.P_CENTERS.c_base, {playing_card = G.playing_card})
-					if edition then
-						card:set_edition(type(edition) == 'table' and edition or {[edition] = true}, true, true)
+				G.E_MANAGER:add_event(Event({
+					delay = 0.1,
+					func = function()
+						cards[i] = true
+						G.playing_card = (G.playing_card and G.playing_card + 1) or 1
+						local card = Card(G.play.T.x + G.play.T.w/2, G.play.T.y, G.CARD_W, G.CARD_H, v, enhancement or G.P_CENTERS.c_base, {playing_card = G.playing_card})
+						if edition then
+							card:set_edition(type(edition) == 'table' and edition or {[edition] = true}, true, true)
+						end
+						play_sound('card1')
+						table.insert(G.playing_cards, card)
+						card:add_to_deck()
+						if emplacement then emplacement:emplace(card) else G.deck:emplace(card) end
+						return true
 					end
-					play_sound('card1')
-					table.insert(G.playing_cards, card)
-					card:add_to_deck()
-					if emplacement then emplacement:emplace(card) else G.deck:emplace(card) end
-					return true
-				end, 0.1)
+				}))
 			end
 		end
 	end
@@ -14399,7 +14242,7 @@ SMODS.Consumable {
 			jl.jokers({ remove_playing_cards = true, removed = targets })
 		end
 		delay(0.5)
-		Q(function()
+		G.E_MANAGER:add_event(Event({func = function()
 			if G.jokers then 
 				G.jokers:change_size_absolute(card.ability.extra.slots)
 			end
@@ -14407,8 +14250,7 @@ SMODS.Consumable {
 			targets = nil
 			count = nil
 			cards = nil
-			return true
-		end)
+		return true end }))
 	end
 }
 
@@ -14438,7 +14280,7 @@ SMODS.Consumable {
 	end,
 	use = function(self, card, area, copier)
 		for i = 1, math.min(math.ceil(card.ability.extra.spectrals), G.consumeables.config.card_limit - #G.consumeables.cards) do
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 				if G.consumeables.config.card_limit > #G.consumeables.cards then
 					play_sound('jen_draw')
 					local card2 = create_card('Spectral', G.consumeables, nil, nil, nil, nil, nil, 'pri')
@@ -14447,13 +14289,13 @@ SMODS.Consumable {
 					card:juice_up(0.3, 0.5)
 				end
 				return true
-			end, 0.4, nil, 'after')
+			end }))
 		end
 		delay(0.6)
 	end,
 	bulk_use = function(self, card, area, copier, number)
 		for i = 1, math.min(math.ceil(card.ability.extra.spectrals) * number, G.consumeables.config.card_limit - #G.consumeables.cards) do
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 				if G.consumeables.config.card_limit > #G.consumeables.cards then
 					play_sound('jen_draw')
 					local card2 = create_card('Spectral', G.consumeables, nil, nil, nil, nil, nil, 'pri')
@@ -14462,7 +14304,7 @@ SMODS.Consumable {
 					card:juice_up(0.3, 0.5)
 				end
 				return true
-			end, 0.4, nil, 'after')
+			end }))
 		end
 		delay(0.6)
 	end
@@ -14911,6 +14753,228 @@ local hoxxesblurbs = {
 	"Mushroom!"
 }
 
+
+--[[ ##THIS NEEDS A REVISION##
+local hoxxes_max = 1000
+
+SMODS.Consumable {
+	key = 'hoxxes',
+	loc_txt = {
+		name = 'Hoxxes',
+		text = {
+			'{C:attention}Mines{} each {C:attention}playing card{} in hand, {C:attention}downgrading{} its {C:attention}rank{} by {C:attention}1',
+			'Repeat this by its {C:attention}max number of self-retriggers{} if it has any',
+			'Apply {C:attention}various bonuses {C:inactive}(chip, mult, dollars){} to {C:attention}most played hand{} for each hit',
+			'If card is a {C:attention}2{} or {C:attention}Stone{}, {C:red}destroy it{} and {C:planet}level up the hand',
+			'{C:attention}Glass{} cards have a {C:green}#1# in 4 chance{} to {C:red}be destroyed instantly{} with each hit',
+			'{C:inactive}(Most played hand : {C:attention}#2#{C:inactive})',
+			'{C:inactive}(Max limit of ' .. number_format(hoxxes_max) .. ' cards)'
+		}
+	},
+	set = 'Spectral',
+    hidden = true,
+	soul_rate = 0.02,
+    soul_set = "Planet",
+	set_card_type_badge = hoxxesplanet,
+	pos = { x = 0, y = 0 },
+	cost = 15,
+	unlocked = true,
+	discovered = true,
+	atlas = 'jenhoxxes',
+    loc_vars = function(self, info_queue, center)
+        return {vars = {G.GAME.probabilities.normal, localize(jl.favhand(), 'poker_hands')}}
+    end,
+	can_use = function(self, card)
+		return jl.canuse() and (G.STATE == G.STATES.SELECTING_HAND or (jl.booster() and (((card.area or {}) ~= G.consumeables) or #G.hand.cards > 0)))
+	end,
+	use = function(self, card, area, copier)
+		if #G.hand.cards > 0 then
+			local hand = jl.favhand()
+			local exhausted = {}
+			jl.th(hand)
+			for k, v in ipairs(G.hand.cards) do
+				if k <= hoxxes_max and v.gc and v:gc().key ~= 'j_jen_goob_lefthand' and v:gc().key ~= 'j_jen_goob_righthand' then
+					local iterations = 1
+					local extrachips = v.ability.name == 'Stone Card' and 0 or v.base.nominal
+					local extramult = 0
+					local xm = 1
+					local xc = 1
+					local em = 1
+					local ec = 1
+					local eem = to_big(1)
+					local eec = to_big(1)
+					local eeem = to_big(1)
+					local eeec = to_big(1)
+					local money = 0
+					local willbreak = -1
+					local predictedrank = v.base.id or 2
+					local obj = v.edition or {}
+					local levelup = false
+					if v.ability.retriggers or v.ability.repetitions then
+						iterations = iterations + (v.ability.retriggers or v.ability.repetitions)
+					end
+					if obj.retriggers or obj.repetitions then
+						iterations = iterations + (obj.retriggers or obj.repetitions)
+					end
+						local obj2 = v:gc().config
+						if obj2.retriggers or obj2.repetitions then
+							iterations = iterations + (obj2.retriggers or obj2.repetitions)
+						end
+						for i = 1, iterations do
+							if i ~= 1 then
+								extrachips = extrachips + predictedrank
+							end
+							if obj2.mult and obj2.mult > 0 then
+								extramult = extramult + obj2.mult
+							end
+							if obj2.bonus and obj2.bonus > 0 then
+								extrachips = extrachips + obj2.bonus
+							end
+							if obj2.p_dollars and obj2.p_dollars > 0 then
+								money = money + obj2.p_dollars
+							end
+							if obj2.h_dollars and obj2.h_dollars > 0 then
+								money = money + obj2.h_dollars
+							end
+							if v.ability.perma_bonus and v.ability.perma_bonus > 0 then
+								extrachips = extrachips + v.ability.perma_bonus
+							end
+							if obj2.h_x_mult and obj2.h_x_mult > 1 then
+								xm = xm * obj2.h_x_mult
+							end
+							if obj2.Xmult and obj2.Xmult > 1 then
+								xm = xm * obj2.Xmult
+							end
+							if obj and next(obj) ~= nil and not obj.negative then
+								if obj.chips then
+									extrachips = extrachips + obj.chips
+								end
+								if obj.mult then
+									extramult = extramult + obj.mult
+								end
+								if obj.p_dollars then
+									money = money + obj.p_dollars
+								end
+								if obj.x_mult then
+									xm = xm * obj.x_mult
+								end
+								if obj.x_chips then
+									xc = xc * obj.x_chips
+								end
+								if obj.e_mult then
+									em = (em <= 1 and obj.e_mult or (em ^ obj.e_mult))
+								end
+							end
+							predictedrank = predictedrank - 1
+							if (v.ability.name == 'Glass Card' and jl.chance('mining_glass', 4)) or predictedrank < 2 or v:norank() then
+								willbreak = i
+								levelup = true
+								break
+							end
+						end
+					G.E_MANAGER:add_event(Event({delay = 1, func = function()
+						card:juice_up(0.5, 0.2)
+						v:juice_up(1, 1)
+						if v:get_id() <= 2 or iterations == willbreak then
+							iterations = 0
+							play_sound(v.ability.name == 'Glass Card' and 'jen_crystalbreak' or ('jen_metalbreak' .. math.random(2)), 1, 0.4)
+							if v.facing == 'front' then v:flip() end
+							local suit_prefix = string.sub(v.base.suit, 1, 1)..'_'
+							v:set_base(G.P_CARDS[suit_prefix..'2'])
+							table.insert(exhausted, v)
+							add_malice(5)
+						else
+							iterations = iterations - 1
+							local suit_prefix = string.sub(v.base.suit, 1, 1)..'_'
+							local rank_suffix = math.max(v.base.id-1, 2)
+							if rank_suffix < 10 then rank_suffix = tostring(rank_suffix)
+							elseif rank_suffix == 10 then rank_suffix = 'T'
+							elseif rank_suffix == 11 then rank_suffix = 'J'
+							elseif rank_suffix == 12 then rank_suffix = 'Q'
+							elseif rank_suffix == 13 then rank_suffix = 'K'
+							end
+							if G.P_CARDS[suit_prefix..rank_suffix] then
+							v:set_base(G.P_CARDS[suit_prefix..rank_suffix])
+							play_sound(v.ability.name == 'Glass Card' and ('jen_crystalhit' .. math.random(3)) or 'jen_metalhit', 1, 0.4)
+						end
+					return iterations < 1 end }))
+						if levelup then
+							level_up_hand(v, hand, nil, 1)
+						end
+						if extrachips > 0 then
+							G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+								play_sound('chips1')
+								v:juice_up(0.8, 0.5)
+							return true end }))
+							update_hand_text({delay = 0}, {chips = '+' .. number_format(extrachips), StatusText = true})
+							G.GAME.hands[hand].chips = G.GAME.hands[hand].chips + extrachips
+						end
+						if extramult > 0 then
+							G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+								play_sound('multhit1')
+								v:juice_up(0.8, 0.5)
+							return true end }))
+							update_hand_text({delay = 0}, {mult = '+' .. number_format(extramult), StatusText = true})
+							G.GAME.hands[hand].mult = G.GAME.hands[hand].mult + extramult
+						end
+						if xc > 1 then
+							G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+								play_sound('talisman_xchip')
+								v:juice_up(0.8, 0.5)
+							return true end }))
+							update_hand_text({delay = 0}, {chips = 'x' .. tostring(jl.round(xc, 3)), StatusText = true})
+							G.GAME.hands[hand].chips = G.GAME.hands[hand].chips * xc
+						end
+						if xm > 1 then
+							G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+								play_sound('multhit2')
+								v:juice_up(0.8, 0.5)
+							return true end }))
+							update_hand_text({delay = 0}, {mult = 'x' .. tostring(jl.round(xm, 3)), StatusText = true})
+							G.GAME.hands[hand].mult = G.GAME.hands[hand].mult * xm
+						end
+						if em > 1 then
+							G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+								play_sound('talisman_emult')
+								v:juice_up(0.8, 0.5)
+							return true end }))
+							update_hand_text({delay = 0}, {mult = '^' .. tostring(jl.round(em, 3)), StatusText = true})
+							G.GAME.hands[hand].mult = G.GAME.hands[hand].mult ^ em
+						end
+						if money > 0 then
+							ease_dollars(money)
+						end
+					delay(1)
+					update_hand_text({sound = 'button', volume = 0.5, pitch = 1.1, delay = 0.3}, {handname=localize(hand, 'poker_hands'),chips = G.GAME.hands[hand].chips, mult = G.GAME.hands[hand].mult, level=G.GAME.hands[hand].level})
+				end
+			end
+			jl.rd(2)
+			jl.ch()
+			G.E_MANAGER:add_event(Event({trigger = 'after', func = function()
+				for k, v in pairs(exhausted) do
+					v:start_dissolve()
+				end
+				jl.jokers({ remove_playing_cards = true, removed = exhausted })
+			return true end }))
+			local rnd = math.random(#hoxxesblurbs)
+			if rnd == #hoxxesblurbs - 2 then
+				play_sound_q('jen_wererich')
+			elseif rnd == #hoxxesblurbs - 1 then
+				play_sound_q('jen_mushroom1')
+			elseif rnd == #hoxxesblurbs then
+				play_sound_q('jen_mushroom2')
+			end
+			add_malice(25)
+			card_eval_status_text(card, 'extra', nil, nil, nil, {message = hoxxesblurbs[rnd], colour = G.C.PURPLE})
+		else
+			local card2 = create_card('Spectral', G.consumeables, nil, nil, nil, nil, card:gc().key, 'hoxxesreturn')
+			card2:add_to_deck()
+			G.consumeables:emplace(card2)
+		end
+	end
+}
+]]
+
 local yawetag_badge = function(self, card, badges)
 	badges[#badges + 1] = create_badge("Spectral?", G.C.CRY_EMBER, G.C.CRY_ASCENDANT, 1.2)
 end
@@ -15180,7 +15244,7 @@ SMODS.Consumable {
 				end
 			else
 				for i = 1, quota do
-					Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Planet', G.consumeables, nil, nil, nil, nil, nil, 'satellite_planet')
 							if card.edition then
@@ -15190,7 +15254,7 @@ SMODS.Consumable {
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 						return true
-					end, 0.4, nil, 'after')
+					end }))
 				end
 			end
 			Q(function() Q(function() if card then card.already_used_once = nil end return true end) return true end)
@@ -15241,20 +15305,19 @@ SMODS.Consumable {
 	end,
 	use = function(self, card, area, copier)
 		if #G.hand.highlighted > 0 then
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 				play_sound('tarot1')
 				card:juice_up(0.3, 0.5)
-				return true
-			end, 0.4, nil, 'after')
+			return true end }))
 			for i=1, #G.hand.highlighted do
 				local percent = 1.15 - (i-0.999)/(#G.hand.highlighted-0.998)*0.3
-				Q(function() G.hand.highlighted[i]:flip();play_sound('card1', percent);G.hand.highlighted[i]:juice_up(0.3, 0.3);return true end, 0.15, nil, 'after')
+				G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.15,func = function() G.hand.highlighted[i]:flip();play_sound('card1', percent);G.hand.highlighted[i]:juice_up(0.3, 0.3);return true end }))
 			end
 			delay(0.2)
 			for i=1, #G.hand.highlighted do
 				local CARD = G.hand.highlighted[i]
 				local percent = 0.85 + (i-0.999)/(#G.hand.highlighted-0.998)*0.3
-				Q(function() G.hand:remove_from_highlighted(CARD);CARD:flip();CARD:set_ability(G.P_CENTERS['m_jen_' .. pseudorandom_element(power_enhancements, pseudoseed("centurion_random"))], true, nil);play_sound('jen_pop');CARD:juice_up(0.3, 0.3);return true end, 0.15, nil, 'after')
+				G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.15,func = function() G.hand:remove_from_highlighted(CARD);CARD:flip();CARD:set_ability(G.P_CENTERS['m_jen_' .. pseudorandom_element(power_enhancements, pseudoseed("centurion_random"))], true, nil);play_sound('jen_pop');CARD:juice_up(0.3, 0.3);return true end }))
 			end
 		end
 	end
@@ -15285,20 +15348,19 @@ SMODS.Consumable {
 	end,
 	use = function(self, card, area, copier)
 		if #G.hand.highlighted > 0 then
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 				play_sound('tarot1')
 				card:juice_up(0.3, 0.5)
-				return true
-			end, 0.4, nil, 'after')
+			return true end }))
 			for i=1, #G.hand.highlighted do
 				local percent = 1.15 - (i-0.999)/(#G.hand.highlighted-0.998)*0.3
-				Q(function() G.hand.highlighted[i]:flip();play_sound('card1', percent);G.hand.highlighted[i]:juice_up(0.3, 0.3);return true end, 0.15, nil, 'after')
+				G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.15,func = function() G.hand.highlighted[i]:flip();play_sound('card1', percent);G.hand.highlighted[i]:juice_up(0.3, 0.3);return true end }))
 			end
 			delay(0.2)
 			for i=1, #G.hand.highlighted do
 				local CARD = G.hand.highlighted[i]
 				local percent = 0.85 + (i-0.999)/(#G.hand.highlighted-0.998)*0.3
-				Q(function() G.hand:remove_from_highlighted(CARD);CARD:flip();CARD:set_ability(G.P_CENTERS['m_jen_' .. string.lower(pseudorandom_element(handinacard, pseudoseed("sleeve_random"))[2])], true, nil);play_sound('jen_pop');CARD:juice_up(0.3, 0.3);return true end, 0.15, nil, 'after')
+				G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.15,func = function() G.hand:remove_from_highlighted(CARD);CARD:flip();CARD:set_ability(G.P_CENTERS['m_jen_' .. string.lower(pseudorandom_element(handinacard, pseudoseed("sleeve_random"))[2])], true, nil);play_sound('jen_pop');CARD:juice_up(0.3, 0.3);return true end }))
 			end
 		end
 	end
@@ -15337,6 +15399,39 @@ SMODS.Consumable {
 	end
 }
 
+--[[SMODS.Consumable {
+	key = 'bazaar',
+	loc_txt = {
+		name = 'The Bazaar',
+		text = {
+			'Choose up to {C:attention}#1#{} playing cards',
+			'If the card is {C:attention}not enhanced{}, {C:green,E:1}randomise{} it for {C:money}$1',
+			'If the card is {C:attention}enhanced{}, {C:money}sell{} it for {C:money}$4 + its sell value'
+			spriter('cozyori')
+		}
+	},
+	config = {max_highlighted = 5},
+	set = 'Tarot',
+	pos = { x = 3, y = 0 },
+	cost = 3,
+	unlocked = true,
+	discovered = true,
+	atlas = 'jenacc',
+    loc_vars = function(self, info_queue, center)
+        return {vars = {((center or {}).ability or {}).max_highlighted or 1}}
+    end,
+	can_use = function(self, card)
+		return jl.canuse() and #G.hand.highlighted <= (card.ability.max_highlighted + (card.area == G.hand and 1 or 0)) and #G.hand.highlighted > (card.area == G.hand and 1 or 0)
+	end,
+	use = function(self, card, area, copier)
+		if #G.hand.highlighted > 0 then
+			for k, v in pairs(G.hand.highlighted) do
+				v:set_edition({jen_wee = true})
+				Q(function() G.hand:remove_from_highlighted(v) return true end)
+			end
+		end
+	end
+}]]
 
 local jokerinatarot_blurbs = {
 	"Hey! Pick me!",
@@ -15567,7 +15662,7 @@ SMODS.Consumable {
 		if not card.already_used_once then
 			card.already_used_once = true
 			for i = 1, math.ceil(card.ability.extra.extraconsumables) do
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 						play_sound('jen_draw')
 						local card2 = create_card('Consumeables', G.consumeables, nil, nil, nil, nil, nil, 'moon_planet')
 						if card.edition then
@@ -15577,7 +15672,7 @@ SMODS.Consumable {
 						G.consumeables:emplace(card2)
 						card:juice_up(0.3, 0.5)
 					return true
-				end, 0.4, nil, 'after')
+				end }))
 			end
 			Q(function() Q(function() if card then card.already_used_once = nil end return true end) return true end)
 			delay(0.6)
@@ -15599,7 +15694,7 @@ SMODS.Consumable {
 				end
 			else
 				for i = 1, quota do
-					Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Consumeables', G.consumeables, nil, nil, nil, nil, nil, 'moon_planet')
 							if card.edition then
@@ -15609,7 +15704,7 @@ SMODS.Consumable {
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 						return true
-					end, 0.4, nil, 'after')
+					end }))
 				end
 			end
 			Q(function() Q(function() if card then card.already_used_once = nil end return true end) return true end)
@@ -15701,25 +15796,37 @@ SMODS.Consumable {
 			lvupallhands(math.ceil(card.ability.extra.up), card)
 		else
 			jl.th('all')
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				G.TAROT_INTERRUPT_PULSE = true
-				return true
-			end, 0.2, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.2,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = true
+					return true
+				end,
+			}))
 			update_hand_text({ delay = 0 }, { mult = "?", notifcol = G.C.JOKER_GREY, StatusText = true })
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				return true
-			end, 0.9, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					return true
+				end,
+			}))
 			update_hand_text({ delay = 0 }, { chips = "?", notifcol = G.C.JOKER_GREY, StatusText = true })
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				G.TAROT_INTERRUPT_PULSE = nil
-				return true
-			end, 0.9, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = nil
+					return true
+				end,
+			}))
 			update_hand_text({ sound = "button", volume = 0.7, pitch = 0.9, delay = 0 }, { level = card.ability.extra.down .. '~+' .. card.ability.extra.up })
 			delay(1.3)
 			for _, hand in ipairs(G.handlist) do
@@ -15750,25 +15857,37 @@ SMODS.Consumable {
 				end
 			end
 			jl.th('all')
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				G.TAROT_INTERRUPT_PULSE = true
-				return true
-			end, 0.2, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.2,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = true
+					return true
+				end,
+			}))
 			update_hand_text({ delay = 0 }, { mult = "?", notifcol = G.C.JOKER_GREY, StatusText = true })
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				return true
-			end, 0.9, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					return true
+				end,
+			}))
 			update_hand_text({ delay = 0 }, { chips = "?", notifcol = G.C.JOKER_GREY, StatusText = true })
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				G.TAROT_INTERRUPT_PULSE = nil
-				return true
-			end, 0.9, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = nil
+					return true
+				end,
+			}))
 			update_hand_text({ sound = "button", volume = 0.7, pitch = 0.9, delay = 0 }, { level = card.ability.extra.down*number .. '~+' .. card.ability.extra.up*number })
 			delay(1.3)
 			for hand, lv in pairs(hands) do
@@ -16129,25 +16248,37 @@ SMODS.Consumable {
 		level_up_hand(card, fav, nil, -mod)
 		delay(0.5)
 		jl.h('Other Hands', '...', '...', '')
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				G.TAROT_INTERRUPT_PULSE = true
-				return true
-			end, 0.2, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.2,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = true
+					return true
+				end,
+			}))
 			update_hand_text({ delay = 0 }, { mult = "+", StatusText = true })
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				return true
-			end, 0.9, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					return true
+				end,
+			}))
 			update_hand_text({ delay = 0 }, { chips = "+", StatusText = true })
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				G.TAROT_INTERRUPT_PULSE = nil
-				return true
-			end, 0.9, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = nil
+					return true
+				end,
+			}))
 			update_hand_text({ sound = "button", volume = 0.7, pitch = 0.9, delay = 0 }, { level = "+" .. (mod / 2) })
 			delay(1.3)
 			for k, v in pairs(G.GAME.hands) do
@@ -16164,25 +16295,37 @@ SMODS.Consumable {
 		level_up_hand(card, fav, nil, -mod)
 		delay(0.5)
 		jl.h('Other Hands', '...', '...', '')
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				G.TAROT_INTERRUPT_PULSE = true
-				return true
-			end, 0.2, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.2,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = true
+					return true
+				end,
+			}))
 			update_hand_text({ delay = 0 }, { mult = "+", StatusText = true })
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				return true
-			end, 0.9, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					return true
+				end,
+			}))
 			update_hand_text({ delay = 0 }, { chips = "+", StatusText = true })
-			Q(function()
-				play_sound("tarot1")
-				card:juice_up(0.8, 0.5)
-				G.TAROT_INTERRUPT_PULSE = nil
-				return true
-			end, 0.9, nil, 'after')
+			G.E_MANAGER:add_event(Event({
+				trigger = "after",
+				delay = 0.9,
+				func = function()
+					play_sound("tarot1")
+					card:juice_up(0.8, 0.5)
+					G.TAROT_INTERRUPT_PULSE = nil
+					return true
+				end,
+			}))
 			update_hand_text({ sound = "button", volume = 0.7, pitch = 0.9, delay = 0 }, { level = "+" .. (mod / 2) })
 			delay(1.3)
 			for k, v in pairs(G.GAME.hands) do
@@ -16428,7 +16571,7 @@ SMODS.Consumable {
 				while budget >= card.ability.exchange_rate do
 					did_exchange = true
 					for i = 1, math.ceil(card.ability.exchange) do
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Planet', G.consumeables, nil, nil, nil, nil, nil, 'europa_exchange')
 							if card.edition then
@@ -16439,7 +16582,7 @@ SMODS.Consumable {
 							card:juice_up(0.3, 0.5)
 							target:juice_up(0.3, 0.5)
 							return true
-						end, 0.4, nil, 'after')
+						end }))
 					end
 					budget = budget - card.ability.exchange_rate
 				end
@@ -16719,19 +16862,27 @@ SMODS.Consumable {
 		jl.th(hand)
 		G.GAME.hands[hand].chips = G.GAME.hands[hand].chips + (added_chips * data.level)
 		G.GAME.hands[hand].mult = G.GAME.hands[hand].mult + (added_mult * data.level)
-		Q(function()
-			play_sound("tarot1")
-			card:juice_up(0.8, 0.5)
-			G.TAROT_INTERRUPT_PULSE = true
-			return true
-		end, 0.2, nil, 'after')
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			delay = 0.2,
+			func = function()
+				play_sound("tarot1")
+				card:juice_up(0.8, 0.5)
+				G.TAROT_INTERRUPT_PULSE = true
+				return true
+			end,
+		}))
 		update_hand_text({ delay = 0 }, { mult = G.GAME.hands[hand].mult, StatusText = true })
-		Q(function()
-			play_sound("tarot1")
-			card:juice_up(0.8, 0.5)
-			G.TAROT_INTERRUPT_PULSE = nil
-			return true
-		end, 0.9, nil, 'after')
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			delay = 0.9,
+			func = function()
+				play_sound("tarot1")
+				card:juice_up(0.8, 0.5)
+				G.TAROT_INTERRUPT_PULSE = nil
+				return true
+			end,
+		}))
 		update_hand_text({ delay = 0 }, { chips = G.GAME.hands[hand].chips, StatusText = true })
 		delay(4)
 		jl.ch()
@@ -16755,19 +16906,27 @@ SMODS.Consumable {
 		end
 		G.GAME.hands[hand].l_chips = old_lchips + added_chips
 		G.GAME.hands[hand].l_mult = old_lmult + added_mult
-		Q(function()
-			play_sound("tarot1")
-			card:juice_up(0.8, 0.5)
-			G.TAROT_INTERRUPT_PULSE = true
-			return true
-		end, 0.2, nil, 'after')
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			delay = 0.2,
+			func = function()
+				play_sound("tarot1")
+				card:juice_up(0.8, 0.5)
+				G.TAROT_INTERRUPT_PULSE = true
+				return true
+			end,
+		}))
 		update_hand_text({ delay = 0 }, { mult = G.GAME.hands[hand].l_mult, StatusText = true })
-		Q(function()
-			play_sound("tarot1")
-			card:juice_up(0.8, 0.5)
-			G.TAROT_INTERRUPT_PULSE = nil
-			return true
-		end, 0.9, nil, 'after')
+		G.E_MANAGER:add_event(Event({
+			trigger = "after",
+			delay = 0.9,
+			func = function()
+				play_sound("tarot1")
+				card:juice_up(0.8, 0.5)
+				G.TAROT_INTERRUPT_PULSE = nil
+				return true
+			end,
+		}))
 		update_hand_text({ delay = 0 }, { chips = G.GAME.hands[hand].l_chips, StatusText = true })
 		delay(4)
 		update_operator_display()
@@ -17810,6 +17969,102 @@ SMODS.Consumable {
 	end
 }
 
+--[[SMODS.Consumable {
+	key = 'hiiaka',
+	loc_txt = {
+		name = 'Hi\'iaka',
+		text = {
+			'{C:inactive}(Currently placeholder, has the same effect as Namaka)',
+			'The number of {C:tarot}Tarots{}, {C:planet}Planets{}, {C:spectral}Spectrals{} or {C:code}Codes',
+			'you have used throughout the run are',
+			'{C:attention}applied as levels{} to {C:attention}four random {C:purple}poker hands',
+			'{C:inactive}(The same hand can be picked multiple times)',
+			'{C:inactive}({C:tarot}#1#{C:inactive}, {C:planet}#2#{C:inactive}, {C:spectral}#3#{C:inactive}, {C:code}#4#{C:inactive})',
+			spriter('mailingway')
+		}
+	},
+	set = 'Planet',
+	set_card_type_badge = natsat,
+	pos = { x = 1, y = 10 },
+	cost = 5,
+	unlocked = true,
+	discovered = true,
+	atlas = 'jenplanets',
+    loc_vars = function(self, info_queue, center)
+		local fav = jl.favhand()
+		local hands = jl.adjacenthands(fav)
+        return {vars = {jl.ctu('tarot'), jl.ctu('planet'), jl.ctu('spectral'), jl.ctu('code')}}
+    end,
+	can_use = function(self, card)
+		return jl.canuse()
+	end,
+	use = function(self, card, area, copier)
+		jl.ch()
+		jl.hcm('', '')
+		update_operator_display_custom(' ', G.C.WHITE)
+		delay(1)
+		for k, v in pairs(namaka_data) do
+			local amt = jl.ctu(string.lower(k))
+			update_operator_display_custom(k, v)
+			delay(2)
+			update_operator_display_custom('+' .. number_format(amt), v)
+			delay(2)
+			if amt > 0 then
+				local sel = jl.rndhand(nil, 'jen_namaka_' .. string.lower(k))
+				if (G.SETTINGS.FASTFORWARD or 0) < 1 then
+					for i = 1, math.random(3, 6) do
+						jl.th(G.handlist[math.random(#G.handlist)])
+						delay(0.15)
+					end
+				end
+				jl.th(sel)
+				delay(1)
+				level_up_hand(card, sel, nil, amt)
+			else
+				play_sound_q('timpani')
+				update_operator_display_custom('Nope!', G.C.RED)
+				delay(1)
+			end
+			delay(1)
+		end
+		jl.ch()
+		update_operator_display()
+	end,
+	bulk_use = function(self, card, area, copier, number)
+		jl.ch()
+		jl.hcm('', '')
+		update_operator_display_custom(' ', G.C.WHITE)
+		delay(1)
+		for i = 1, number do
+			for k, v in pairs(namaka_data) do
+				local amt = jl.ctu(string.lower(k))
+				update_operator_display_custom(k, v)
+				delay(2/i)
+				update_operator_display_custom('+' .. number_format(amt), v)
+				delay(2/i)
+				if amt > 0 then
+					local sel = jl.rndhand(nil, 'jen_namaka_' .. string.lower(k))
+					if i == 1 and (G.SETTINGS.FASTFORWARD or 0) < 1 then
+						for i = 1, math.random(3, 6) do
+							jl.th(G.handlist[math.random(#G.handlist)])
+							delay(0.15)
+						end
+					end
+					jl.th(sel)
+					delay(1/i)
+					level_up_hand(card, sel, nil, amt)
+				else
+					play_sound_q('timpani')
+					update_operator_display_custom('Nope!', G.C.RED)
+					delay(1)
+				end
+				delay(1/i)
+			end
+		end
+		jl.ch()
+		update_operator_display()
+	end
+}]]
 
 --UNO CONSUMABLES
 
@@ -17868,19 +18123,17 @@ SMODS.Consumable {
 				if card then card:juice_up(0.8, 0.5) end
 			return true end }))
 			jl.hm('+', true)
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
-				return true
-			end, 0.9, nil, 'after')
+			return true end }))
 			jl.hlv('+1')
 			play_sound_q('button', 0.9, 0.7)
 		else
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
-				return true
-			end, 0.9, nil, 'after')
+			return true end }))
 			jl.h('All Ranks & Suits', '+', '+', '+1', true)
 		end
 		delay(1)
@@ -17901,31 +18154,27 @@ SMODS.Consumable {
 		jl.h('All Ranks & Suits', '...', '...', '')
 		delay(.5)
 		if (G.SETTINGS.FASTFORWARD or 0) < 1 then
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
-				return true
-			end, 0.2, nil, 'after')
+			return true end }))
 			jl.hc('+', true)
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
-				return true
-			end, 0.2, nil, 'after')
+			return true end }))
 			jl.hm('+', true)
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
-				return true
-			end, 0.2, nil, 'after')
+			return true end }))
 			jl.hlv('+' .. number)
 			play_sound_q('button', 0.9, 0.7)
 		else
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
 				play_sound('tarot1')
 				if card then card:juice_up(0.8, 0.5) end
-				return true
-			end, 0.2, nil, 'after')
+			return true end }))
 			jl.h('All Ranks & Suits', '+', '+', '+' .. number, true)
 		end
 		delay(1)
@@ -18066,7 +18315,7 @@ for k, v in pairs(uno_data.colours) do
 					end
 				else
 					for i = 1, quota do
-						Q(function()
+						G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 								play_sound('jen_draw')
 								local card2 = create_card('Consumeables', G.consumeables, nil, nil, nil, nil, 'c_jen_uno_' .. string.lower(k) .. string.lower(pseudorandom_element(uno_data.values, pseudoseed('unodrawtwo' .. string.lower(k)))), 'unodrawtwo_' .. string.lower(k))
 								--[[if card.edition then
@@ -18076,7 +18325,7 @@ for k, v in pairs(uno_data.colours) do
 								G.consumeables:emplace(card2)
 								card:juice_up(0.3, 0.5)
 							return true
-						end, 0.4, nil, 'after')
+						end }))
 					end
 				end
 				Q(function() Q(function() if card then card.already_used_once = nil end return true end) return true end)
@@ -18109,31 +18358,27 @@ for k, v in pairs(uno_data.colours) do
 		use = function(self, card, area, copier)
 			jl.h('Other Ranks & Suits', '...', '...', '')
 			if (G.SETTINGS.FASTFORWARD or 0) < 1 then
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 					play_sound('tarot1')
 					if card then card:juice_up(0.8, 0.5) end
-					return true
-				end, 0.9, nil, 'after')
+				return true end }))
 				jl.hc('-', true)
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 					play_sound('tarot1')
 					if card then card:juice_up(0.8, 0.5) end
-					return true
-				end, 0.9, nil, 'after')
+				return true end }))
 				jl.hm('-', true)
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 					play_sound('tarot1')
 					if card then card:juice_up(0.8, 0.5) end
-					return true
-				end, 0.9, nil, 'after')
+				return true end }))
 				jl.hlv('-0~0.5')
 				play_sound_q('button', 0.9, 0.7)
 			else
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 					play_sound('tarot1')
 					if card then card:juice_up(0.8, 0.5) end
-					return true
-				end, 0.9, nil, 'after')
+				return true end }))
 				jl.h('Other Ranks & Suits', '-', '-', '-0~0.5', true)
 			end
 			delay(1.3)
@@ -18167,11 +18412,10 @@ for k, v in pairs(uno_data.colours) do
 				jl.hlv('-0~' .. (number / 2))
 				play_sound_q('button', 0.9, 0.7)
 			else
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.9, func = function()
 					play_sound('tarot1')
 					if card then card:juice_up(0.8, 0.5) end
-					return true
-				end, 0.9, nil, 'after')
+				return true end }))
 				jl.h('Other Ranks & Suits', '-', '-', '-0~' .. (number / 2), true)
 			end
 			delay(1.3)
@@ -18382,7 +18626,7 @@ SMODS.Consumable {
 			if not card.already_used_once then
 				card.already_used_once = true
 				for i = 1, 4 * number do
-					Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('jen_uno', G.consumeables, nil, nil, nil, nil, nil, 'unodrawfour')
 							--[[if card.edition then
@@ -18392,7 +18636,7 @@ SMODS.Consumable {
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 						return true
-					end, 0.4, nil, 'after')
+					end }))
 				end
 				Q(function() Q(function() if card then card.already_used_once = nil end return true end) return true end)
 				delay(0.6)
@@ -18439,7 +18683,7 @@ SMODS.Consumable {
 		for k, v in pairs(jl.countsuit()) do
 			level_up_suit(card, k, nil, v * card.ability.levels, true)
 				if v / 2 > 1 then
-					Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Consumeables', G.consumeables, nil, nil, nil, nil, 'c_jen_uno_' .. suit_to_uno(k) .. 'drawtwo', 'uno_paint')
 							if math.floor(v / 2) > 1 then
@@ -18450,7 +18694,7 @@ SMODS.Consumable {
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 						return true
-					end, 0.4, nil, 'after')
+					end }))
 				end
 			delay(0.6)
 		end
@@ -18460,7 +18704,7 @@ SMODS.Consumable {
 		for k, v in pairs(jl.countsuit()) do
 			level_up_suit(card, k, nil, v * card.ability.levels * number, true)
 				if v / 2 > 1 then
-					Q(function()
+					G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 							play_sound('jen_draw')
 							local card2 = create_card('Consumeables', G.consumeables, nil, nil, nil, nil, 'c_jen_uno_' .. suit_to_uno(k) .. 'drawtwo', 'uno_paint')
 							card2:setQty(math.floor(v / 2) * number)
@@ -18469,7 +18713,7 @@ SMODS.Consumable {
 							G.consumeables:emplace(card2)
 							card:juice_up(0.3, 0.5)
 						return true
-					end, 0.4, nil, 'after')
+					end }))
 				end
 			delay(0.6)
 		end
@@ -18673,17 +18917,15 @@ for k, v in pairs(omegaplanets) do
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 0.3}, {handname=localize(hand, 'poker_hands'),chips = G.GAME.hands[hand].l_chips, mult = G.GAME.hands[hand].l_mult, level=G.GAME.hands[hand].level})
 			G.GAME.hands[hand].l_chips = G.GAME.hands[hand].l_chips * 3
 			G.GAME.hands[hand].l_mult = G.GAME.hands[hand].l_mult * 3
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost1', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {chips = 'x3', StatusText = true})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost2', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {mult = 'x3', StatusText = true})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {chips = G.GAME.hands[hand].l_chips, mult = G.GAME.hands[hand].l_mult})
 			delay(2)
@@ -18691,17 +18933,15 @@ for k, v in pairs(omegaplanets) do
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 1}, {chips = G.GAME.hands[hand].chips, mult = G.GAME.hands[hand].mult})
 			G.GAME.hands[hand].chips = G.GAME.hands[hand].chips * 3
 			G.GAME.hands[hand].mult = G.GAME.hands[hand].mult * 3
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost3', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {chips = 'x3', StatusText = true})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost4', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {mult = 'x3', StatusText = true})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {chips = G.GAME.hands[hand].chips, mult = G.GAME.hands[hand].mult})
 			level_up_hand(card, hand, false, G.GAME.hands[hand].level)
@@ -18714,17 +18954,15 @@ for k, v in pairs(omegaplanets) do
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 0.3}, {handname=localize(hand, 'poker_hands'),chips = G.GAME.hands[hand].l_chips, mult = G.GAME.hands[hand].l_mult, level=G.GAME.hands[hand].level})
 			G.GAME.hands[hand].l_chips = G.GAME.hands[hand].l_chips * factor
 			G.GAME.hands[hand].l_mult = G.GAME.hands[hand].l_mult * factor
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost1', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 0.3}, {chips = 'x' .. number_format(factor), StatusText = true})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost2', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 0.3}, {mult = 'x' .. number_format(factor), StatusText = true})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {chips = G.GAME.hands[hand].l_chips, mult = G.GAME.hands[hand].l_mult})
 			delay(2)
@@ -18732,17 +18970,15 @@ for k, v in pairs(omegaplanets) do
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 1}, {chips = G.GAME.hands[hand].chips, mult = G.GAME.hands[hand].mult})
 			G.GAME.hands[hand].chips = G.GAME.hands[hand].chips * 3
 			G.GAME.hands[hand].mult = G.GAME.hands[hand].mult * 3
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost3', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 0.3}, {chips = 'x' .. number_format(factor), StatusText = true})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost4', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 0.3}, {mult = 'x' .. number_format(factor), StatusText = true})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {chips = G.GAME.hands[hand].chips, mult = G.GAME.hands[hand].mult})
 			level_up_hand(card, hand, false, G.GAME.hands[hand].level * (number <= 1 and number or (2 ^ number)) - (number <= 1 and 0 or G.GAME.hands[hand].level))
@@ -18783,33 +19019,29 @@ end
 		use = function(self, card, area, copier)
 			update_operator_display_custom('Per Lv.', G.C.WHITE)
 			jl.th('all')
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost1', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {chips = 'x9', StatusText = true})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost2', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {mult = 'x9', StatusText = true})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {chips = '+++', mult = '+++'})
 			delay(2)
 			update_operator_display()
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 1}, {chips = '...', mult = '...'})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost3', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {chips = 'x9', StatusText = true})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost4', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {mult = 'x9', StatusText = true})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {chips = '+++', mult = '+++'})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {level = 'x4'})
@@ -18827,33 +19059,29 @@ end
 			local factor = to_big(9) ^ number
 			update_operator_display_custom('Per Lv.', G.C.WHITE)
 			jl.th('all')
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost1', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {chips = 'x' .. number_format(factor), StatusText = true})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost2', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {mult = 'x' .. number_format(factor), StatusText = true})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {chips = '+++', mult = '+++'})
 			delay(2)
 			update_operator_display()
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 1}, {chips = '...', mult = '...'})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost3', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {chips = 'x' .. number_format(factor), StatusText = true})
-			Q(function()
+			G.E_MANAGER:add_event(Event({trigger = 'after', delay = 1, func = function()
 				play_sound('jen_boost4', 1, 0.4)
 				card:juice_up(0.8, 0.5)
-				return true
-			end, 1, nil, 'after')
+			return true end }))
 			update_hand_text({delay = 1}, {mult = 'x' .. number_format(factor), StatusText = true})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {chips = '+++', mult = '+++'})
 			update_hand_text({sound = 'button', volume = 0.7, pitch = 1, delay = 1}, {level = 'x' .. number_format(4^number)})
@@ -19570,22 +19798,21 @@ for k, v in ipairs(enhancetarots_info) do
 			end
 			delay(1)
 			if #G.hand.highlighted > 0 then
-				Q(function()
+				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
 					play_sound('tarot1')
 					card:juice_up(0.3, 0.5)
-					return true
-				end, 0.4, nil, 'after')
+				return true end }))
 				for i=1, #G.hand.highlighted do
 					local CARD = G.hand.highlighted[i]
 					table.insert(targets, CARD)
 					local percent = 1.15 - (i-0.999)/(#G.hand.highlighted-0.998)*0.3
-					Q(function() CARD:flip();play_sound('card1', percent);CARD:juice_up(0.3, 0.3);return true end, 0.15, nil, 'after')
+					G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.15,func = function() CARD:flip();play_sound('card1', percent);CARD:juice_up(0.3, 0.3);return true end }))
 				end
 				delay(0.2)
 				for i=1, #G.hand.highlighted do
 					local CARD = G.hand.highlighted[i]
 					local percent = 0.85 + (i-0.999)/(#G.hand.highlighted-0.998)*0.3
-					Q(function() G.hand:remove_from_highlighted(CARD);CARD:flip();CARD:set_ability(v.e, true, nil);play_sound('tarot2', percent);CARD:juice_up(0.3, 0.3);return true end, 0.15, nil, 'after')
+					G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.15,func = function() G.hand:remove_from_highlighted(CARD);CARD:flip();CARD:set_ability(v.e, true, nil);play_sound('tarot2', percent);CARD:juice_up(0.3, 0.3);return true end }))
 				end
 			end
 			Q(function()
@@ -19748,7 +19975,7 @@ SMODS.Consumable {
 	loc_txt = {
 		name = 'The Wheel of Fortune {C:dark_edition}Omega',
 		text = {
-			'Create {C:dark_edition,s:1.5,E:1}#1#{} random {C:attention}consumables',
+			'Create {C:dark_edition,s:1.5,E:1}500{} random {C:attention}consumables',
 			'Temporarily create a {X:attention}Showman',
 			'for the consumable-creation process',
 			'{C:inactive}(Created cards cannot roll for OMEGA)'
@@ -19767,9 +19994,9 @@ SMODS.Consumable {
 	can_use = function(self, card)
 		return jl.canuse()
 	end,
-	loc_vars = function(self, info_queue, center)
-		return {vars = { (CFG and CFG.omega_wheel_count) or (Jen and Jen.config and Jen.config.omega_wheel_count) or 200 }}
-	end,
+    loc_vars = function(self, info_queue, center)
+        return {vars = {((G.GAME or {}).dollars or 0) ^ 2}}
+    end,
 	use = function(self, card, area, copier)
 		local used_consumable = copier or card
 		local showman = create_card('Joker', G.jokers, nil, nil, nil, nil, 'j_ring_master', 'tempshowman')
@@ -19777,9 +20004,7 @@ SMODS.Consumable {
 		showman:add_to_deck()
 		G.jokers:emplace(showman)
 		Q(function()
-			local count = (CFG and CFG.omega_wheel_count) or (Jen and Jen.config and Jen.config.omega_wheel_count) or 200
-			local max_cap = 500 -- absolute safety ceiling (restored from previous 5000 test cap)
-			for i = 1, math.min(count, max_cap) do
+			for i = 1, 500 do
 				G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.1, func = function()
 						play_sound('timpani')
 						local _card = create_card('Consumeables', G.consumables, nil, nil, nil, nil, nil, 'wofomega')
@@ -19899,7 +20124,7 @@ SMODS.Consumable {
 			kosmos.ability.eternal = true
 			kosmos:add_to_deck()
 			G.jokers:emplace(kosmos)
-			Q(function() G.jokers:set_size_absolute(1) set_dollars(4) return true end, 0.1, nil, 'after')
+			QR(function() G.jokers:set_size_absolute(1) set_dollars(4) return true end, 99)
 			G.consumeables:change_size_absolute(G.consumeables.config.card_limit)
 		return true end, 1)
 	end
@@ -20349,24 +20574,7 @@ function Card:set_ability(center,initial,delay_sprites)
 			return false
 		end
 	end
-	-- Ensure we always pass a valid center to the original setter to avoid leaving
-	-- `self.ability` nil (which causes crashes in UI code that indexes it).
-	local safe_center = center
-	if not safe_center then
-		safe_center = (G and G.P_CENTERS and G.P_CENTERS['c_base']) or nil
-	end
-	if not safe_center then
-		-- As a last resort, create a minimal fallback center stub.
-		safe_center = {
-			set = 'Default',
-			name = '',
-			effect = '',
-			consumeable = false,
-			unlocked = true,
-			pos = { x = 0, y = 0 },
-		}
-	end
-	csar(self, safe_center, initial, delay_sprites)
+	csar(self,center,initial,delay_sprites)
 	if #SMODS.find_card('j_jen_ratau') > 0 and self.gc and self:gc().key ~= 'c_base' and string.sub(self:gc().key, 1, 2) == 'c_' and not self:gc().no_ratau then
 		local mod = 1
 		for k, ratsmakemecrazy in pairs(SMODS.find_card('j_jen_ratau')) do
@@ -21198,17 +21406,11 @@ local ten = to_big(10)
 local gbar = get_blind_amount
 local defaultblindsize = to_big(100)
 function get_blind_amount(ante)
-	-- Ensure we operate on a primitive number for the base game function to avoid table< comparisons
-	ante = to_number(ante)
+	local cfg = Jen.config
 	local amnt
 	if math.floor(ante) ~= ante then
-		-- fractional ante interpolation (proper fractional part)
-		local frac = ante - math.floor(ante)
-		local lower, upper = math.floor(ante), math.ceil(ante)
-		-- delegate to original function with numeric args only
-		local lower_amt = gbar(lower)
-		local upper_amt = gbar(upper)
-		amnt = (lower_amt * (1 - frac)) + (upper_amt * frac)
+		local ratio = math.ceil(ante) - math.floor(ante)
+		amnt = (gbar(math.floor(ante)) * ratio) + (gbar(math.ceil(ante)) * (1 - ratio))
 	else
 		amnt = gbar(ante)
 	end
@@ -21218,8 +21420,6 @@ function get_blind_amount(ante)
 	if overante > 0 then
 		local scalar = Jen.blind_scalar[math.min(overante, #Jen.blind_scalar)] or 1
 		amnt = amnt * scalar
-		-- If the amount has already blown up to an invalid/infinite value, cap and exit early
-		if jl.invalid_number(number_format(amnt)) then return to_big(maxfloat) end
 		if overante >= Jen.config.ante_pow10_4 then
 			amnt = ten^ten^ten^ten^amnt
 		elseif overante >= Jen.config.ante_pow10_3 then
@@ -21229,22 +21429,16 @@ function get_blind_amount(ante)
 		elseif overante >= Jen.config.ante_pow10 then
 			amnt = ten^amnt
 		end
-		-- Recheck after exponentiation to avoid unsafe arrow operations on NaN/Infinity
-		if jl.invalid_number(number_format(amnt)) then return to_big(maxfloat) end
 		if overante >= Jen.config.ante_exponentiate then
 			amnt = amnt ^ amnt
 		end
-		-- Only apply arrow operations if value remains valid; recheck before each step
 		if overante >= Jen.config.ante_tetrate then
-			if jl.invalid_number(number_format(amnt)) then return to_big(maxfloat) end
 			amnt = amnt:arrow(2, 2)
 		end
 		if overante >= Jen.config.ante_pentate then
-			if jl.invalid_number(number_format(amnt)) then return to_big(maxfloat) end
 			amnt = amnt:arrow(3, 2)
 		end
 		if overante >= Jen.config.ante_polytate then
-			if jl.invalid_number(number_format(amnt)) then return to_big(maxfloat) end
 			local arrows = 4 + math.floor((overante - Jen.config.ante_polytate + 1) / Jen.config.polytate_factor)
 			local operand = 2 + math.max(0, arrows - 4 - Jen.config.polytate_factor)
 			amnt = amnt:arrow(math.min(maxArrow, arrows), operand)
@@ -22234,7 +22428,7 @@ if SMODS.BlindEdition then
 		contrast = 3,
 		set_blind = function(self, blind_on_deck)
 			play_sound_q('polychrome1', 0.9)
-			Q(function() if G.GAME.current_round.hands_left > 1 then ease_hands_played(-1) end return true end, 0.1, nil, 'after')
+			QR(function() if G.GAME.current_round.hands_left > 1 then ease_hands_played(-1) end return true end, 99)
 		end
 	})
 	SMODS.BlindEdition:take_ownership('ble_negative', {
@@ -22739,7 +22933,7 @@ SMODS.Blind	{
 SMODS.Blind	{
     loc_txt = {
         name = 'Ahneharka',
-        text = { '+1 Ante per $2 owned,', 'x3 Ante if less than $1 owned (max 1e1 Ante increase)' }
+        text = { '+1 Ante per $2 owned,', 'x3 Ante if less than $1 owned' }
     },
     key = 'epicox',
     config = {},
@@ -22755,23 +22949,15 @@ SMODS.Blind	{
 	in_pool = function(self)
 		return G.GAME.round > Jen.config.ante_threshold * 2
 	end,
-	set_blind = function(self, reset, silent)
+    set_blind = function(self, reset, silent)
 		if not reset then
-			-- Normalize potentially Big values to primitive numbers for safe math/comparisons
-			local dollars = to_number(G.GAME.dollars)
-			local base_ante = to_number(G.GAME.round_resets.ante)
-			-- Gold-based ante increase with hard cap to avoid overflow/straddle runaway
-			local quota = (dollars < 1) and (base_ante * 3) or (dollars / 2)
-			quota = math.min(quota or 0, 1e1)
-			if jl.invalid_number(quota) then quota = 1e1 end
-			local target_ante = base_ante + quota
-			G.GAME.blind.chips = get_blind_amount(target_ante) * G.GAME.blind.mult * G.GAME.starting_params.ante_scaling
+			local quota = to_big(G.GAME.dollars) < to_big(1) and (G.GAME.round_resets.ante * 3) or math.floor(G.GAME.dollars/2)
+			G.GAME.blind.chips = get_blind_amount(G.GAME.round_resets.ante+quota)*G.GAME.blind.mult*G.GAME.starting_params.ante_scaling
 			G.GAME.blind.chip_text = number_format(G.GAME.blind.chips)
-			-- Bypass Straddle mechanics for this ante increase (no start/progress/boost)
-			ease_ante(quota, true, true)
+			ease_ante(quota)
 			Q(function() G.GAME.round_resets.blind_ante = G.GAME.round_resets.ante; G.GAME.blind:set_text() return true end)
-		end
-	end
+        end
+    end
 }
 
 SMODS.Blind	{
@@ -22794,19 +22980,41 @@ SMODS.Blind	{
 		return G.GAME.round > Jen.config.ante_threshold * 2
 	end,
 	debuff_hand = function(self, cards, hand, handname, check)
-		-- Plays must have at least 3 cards
-		if #cards < 3 then return true end
-		-- No identical cards (rank + suit) and at least 2/3 face-down
+		if check then
 			local numfacedown = 0
 			local alreadyhad = {}
-		for _, card in ipairs(cards) do
-			local suit = (card.base and card.base.suit) or ''
-			local suitandrank = card:get_id() .. '_' .. suit
-			if alreadyhad[suitandrank] then return true end
+			for k, card in ipairs(cards) do
+				if card.facing == 'front' then
+					local suitandrank = card:get_id() .. '_' .. card.base.suit
+					if alreadyhad[suitandrank] then
+						return true
+					else
 						alreadyhad[suitandrank] = true
-			if card.facing == 'back' then numfacedown = numfacedown + 1 end
+						if card.facing == 'back' then
+							numfacedown = numfacedown + 1
+						end
+					end
+				else
+					return false
+				end
+			end
+			return numfacedown < (#cards/3) * 2
+		else
+			local numfacedown = 0
+			local alreadyhad = {}
+			for k, card in ipairs(cards) do
+				local suitandrank = card:get_id() .. '_' .. card.base.suit
+				if alreadyhad[suitandrank] then
+					return true
+				else
+					alreadyhad[suitandrank] = true
+					if card.facing == 'back' then
+						numfacedown = numfacedown + 1
+					end
+				end
+			end
+			return numfacedown < (#cards/3) * 2
 		end
-		return numfacedown < math.ceil((#cards * 2) / 3)
 	end,
 	stay_flipped = function(self, area, card)
 		if G.GAME.blind.facedown then
@@ -23076,35 +23284,7 @@ local function almanac_toggle(name, value, col)
 	}}
 end
 
--- Omega Wheel config adjust functions (defined once globally for safety)
-if not G.FUNCS.inc_omega_wheel then
-	local function omega_step()
-		local safe_isDown = (love and love.keyboard and type(love.keyboard.isDown) == 'function') and love.keyboard.isDown or function() return false end
-		local shift = safe_isDown('lshift') or safe_isDown('rshift')
-		local ctrl = safe_isDown('lctrl') or safe_isDown('rctrl')
-		return shift and 50 or ctrl and 5 or 25
-	end
-	G.FUNCS.inc_omega_wheel = function(e)
-		CFG.omega_wheel_count = math.min(500, (CFG.omega_wheel_count or 0) + omega_step())
-		CFG.omega_wheel_string = 'Omega Wheel Count: '..tostring(CFG.omega_wheel_count)
-		if e and e.config and e.config.object and e.config.object.update_text then e.config.object:update_text() end
-	end
-end
-if not G.FUNCS.dec_omega_wheel then
-	G.FUNCS.dec_omega_wheel = function(e)
-		local safe_isDown = (love and love.keyboard and type(love.keyboard.isDown) == 'function') and love.keyboard.isDown or function() return false end
-		local shift = safe_isDown('lshift') or safe_isDown('rshift')
-		local ctrl = safe_isDown('lctrl') or safe_isDown('rctrl')
-		local step = shift and 50 or ctrl and 5 or 25
-		CFG.omega_wheel_count = math.max(1, (CFG.omega_wheel_count or 0) - step)
-		CFG.omega_wheel_string = 'Omega Wheel Count: '..tostring(CFG.omega_wheel_count)
-		if e and e.config and e.config.object and e.config.object.update_text then e.config.object:update_text() end
-	end
-end
-
 SMODS.current_mod.config_tab = function()
-	CFG.omega_wheel_count = CFG.omega_wheel_count or 200
-	CFG.omega_wheel_string = 'Omega Wheel Count: '..tostring(CFG.omega_wheel_count)
     return {n = G.UIT.ROOT, config = {r = 0.1, align = "cm", padding = 0.1, colour = G.C.BLACK, minw = 8, minh = 4}, nodes = {
         {n = G.UIT.R, config = { padding = 0.05 }, nodes = {
             {n = G.UIT.C, config = { minw = G.ROOM.T.w*0.25, padding = 0.05 }, nodes = {
@@ -23121,32 +23301,8 @@ SMODS.current_mod.config_tab = function()
         almanac_toggle('Smoother background & score flames', 'hq_shaders'),
         almanac_toggle('Curb reroll abuse (Tension + Relief)', 'punish_reroll_abuse'),
         almanac_toggle('Wondrous Joker music (by mthd2023)', 'wondrous'),
-        almanac_toggle('Extraordinary+ Joker music (by mthd2023)', 'extraordinary'),
-		-- Omega Wheel count slider (Shift=+/-50, Ctrl=+/-5, default +/-25 handled in prev functions if reused)
-		create_slider({label = 'Omega Wheel Count', w = 6, h = 0.5, text_scale = 0.32, label_scale = 0.35, ref_table = CFG, ref_value = 'omega_wheel_count', min = 1, max = 500, callback = 'omega_wheel_slider_cb', decimal_places = 0}),
+        almanac_toggle('Extraordinary+ Joker music (by mthd2023)', 'extraordinary')
     }}
-end
-
--- Validation for text input apply
-if not G.FUNCS.apply_omega_wheel_input then
-    G.FUNCS.apply_omega_wheel_input = function(e)
-        local val = tonumber(CFG.omega_wheel_count)
-        if not val then val = 200 end
-	val = math.floor(math.max(1, math.min(500, val)))
-        CFG.omega_wheel_count = val
-        CFG.omega_wheel_string = 'Omega Wheel Count: '..tostring(val)
-        if jl and jl.a then jl.a('Set to '..val, G.SETTINGS.GAMESPEED, 0.6, G.C.GREEN) end
-    end
-end
-
--- Slider callback (called after create_slider updates value)
-if not G.FUNCS.omega_wheel_slider_cb then
-	G.FUNCS.omega_wheel_slider_cb = function(e)
-		local v = tonumber(CFG.omega_wheel_count) or 200
-		v = math.max(1, math.min(500, math.floor(v + 0.5)))
-		CFG.omega_wheel_count = v
-		CFG.omega_wheel_string = 'Omega Wheel Count: '..v
-	end
 end
 
 

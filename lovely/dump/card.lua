@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '337baa01301cbdf7ab8d4fd677819956af19f93d1cdb1e8809b2b245275756ae'
+LOVELY_INTEGRITY = 'ebfecbf552a131b9b43e4e074d5cd99b2d69d8bf8432a92898f2a1898b55aba1'
 
 --class
 Card = Moveable:extend()
@@ -2115,7 +2115,7 @@ function Card:open()
                 
                 for i = 1, _size do
                     local card = nil
-                    if booster_obj and booster_obj.create_card and type(booster_obj.create_card) == "function" then
+                    if booster_obj.create_card and type(booster_obj.create_card) == "function" then
                         local _card_to_spawn = booster_obj:create_card(self, i)
                         if type((_card_to_spawn or {}).is) == 'function' and _card_to_spawn:is(Card) then
                             card = _card_to_spawn

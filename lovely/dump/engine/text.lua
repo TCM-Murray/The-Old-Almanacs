@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = 'dfc22f0b4ed3321bb817f31ade95bf714722b2788ce798352dc42a474f9caee7'
+LOVELY_INTEGRITY = '86da2826fee8429c256126248d363cba7765f9353e4f54126bd8b5cfc08ed865'
 
 --Class
 DynaText = Moveable:extend()
@@ -134,8 +134,14 @@ function DynaText:update_text(first_pass)
             end
         end
 
-        self.strings[k].W = to_number(self.strings[k].W)
-        self.strings[k].H = to_number(self.strings[k].H)
+        if Big then
+        	if type(self.strings[k].W) == 'table' then
+        		self.strings[k].W = self.strings[k].W:to_number()
+        	end
+        	if type(self.strings[k].H) == 'table' then
+        		self.strings[k].H = self.strings[k].H:to_number()
+        	end
+        end
         if self.strings[k].W > self.config.W then self.config.W = self.strings[k].W; self.strings[k].W_offset = 0 end
         if self.strings[k].H > self.config.H then self.config.H = self.strings[k].H; self.strings[k].H_offset = 0 end
     end
@@ -170,12 +176,12 @@ function DynaText:pop_in(pop_in_timer)
     self.created_time = G.TIMERS.REAL
 
     for k, letter in ipairs(self.strings[self.focused_string].letters) do
-    	if Big then
-    		letter.dims.x = to_big(letter.dims.x):to_number()
-    		letter.dims.y = to_big(letter.dims.y):to_number()
-    		letter.offset.x = to_big(letter.offset.x):to_number()
-    		letter.offset.y = to_big(letter.offset.y):to_number()
-    	end
+    if Big then
+    	letter.dims.x = to_big(letter.dims.x):to_number()
+    	letter.dims.y = to_big(letter.dims.y):to_number()
+    	letter.offset.x = to_big(letter.offset.x):to_number()
+    	letter.offset.y = to_big(letter.offset.y):to_number()
+    end
         letter.pop_in = 0
     end
 
@@ -187,12 +193,12 @@ function DynaText:align_letters()
         self.focused_string = (self.config.random_element and math.random(1, #self.strings)) or self.focused_string ==  #self.strings and 1 or self.focused_string+1
         self.pop_cycle = false
         for k, letter in ipairs(self.strings[self.focused_string].letters) do
-        	if Big then
-        		letter.dims.x = to_big(letter.dims.x):to_number()
-        		letter.dims.y = to_big(letter.dims.y):to_number()
-        		letter.offset.x = to_big(letter.offset.x):to_number()
-        		letter.offset.y = to_big(letter.offset.y):to_number()
-        	end
+        if Big then
+        	letter.dims.x = to_big(letter.dims.x):to_number()
+        	letter.dims.y = to_big(letter.dims.y):to_number()
+        	letter.offset.x = to_big(letter.offset.x):to_number()
+        	letter.offset.y = to_big(letter.offset.y):to_number()
+        end
             letter.pop_in = 0
         end
         self.config.pop_in = 0.1
@@ -201,12 +207,12 @@ function DynaText:align_letters()
     end
     if self.strings and self.focused_string and self.strings[self.focused_string] and self.strings[self.focused_string].string then self.string = self.strings[self.focused_string].string else return end
     for k, letter in ipairs(self.strings[self.focused_string].letters) do
-    	if Big then
-    		letter.dims.x = to_big(letter.dims.x):to_number()
-    		letter.dims.y = to_big(letter.dims.y):to_number()
-    		letter.offset.x = to_big(letter.offset.x):to_number()
-    		letter.offset.y = to_big(letter.offset.y):to_number()
-    	end
+    if Big then
+    	letter.dims.x = to_big(letter.dims.x):to_number()
+    	letter.dims.y = to_big(letter.dims.y):to_number()
+    	letter.offset.x = to_big(letter.offset.x):to_number()
+    	letter.offset.y = to_big(letter.offset.y):to_number()
+    end
         if self.config.pop_out then 
             letter.pop_in = math.min(1, math.max((self.config.min_cycle_time or 1)-(G.TIMERS.REAL - self.pop_out_time)*self.config.pop_out/(self.config.min_cycle_time or 1), 0))
             letter.pop_in = letter.pop_in*letter.pop_in
@@ -294,12 +300,12 @@ end
             love.graphics.setColor(0, 0, 0, 0.3*self.colours[1][4])
         end
         for k, letter in ipairs(self.strings[self.focused_string].letters) do
-        	if Big then
-        		letter.dims.x = to_big(letter.dims.x):to_number()
-        		letter.dims.y = to_big(letter.dims.y):to_number()
-        		letter.offset.x = to_big(letter.offset.x):to_number()
-        		letter.offset.y = to_big(letter.offset.y):to_number()
-        	end
+        if Big then
+        	letter.dims.x = to_big(letter.dims.x):to_number()
+        	letter.dims.y = to_big(letter.dims.y):to_number()
+        	letter.offset.x = to_big(letter.offset.x):to_number()
+        	letter.offset.y = to_big(letter.offset.y):to_number()
+        end
             local real_pop_in = self.config.min_cycle_time == 0 and 1 or letter.pop_in
             love.graphics.draw(
                 letter.letter,
@@ -326,20 +332,13 @@ end
         self.shadow_parrallax.y/math.sqrt(self.shadow_parrallax.y*self.shadow_parrallax.y + self.shadow_parrallax.x*self.shadow_parrallax.x)*self.font.FONTSCALE/G.TILESIZE
     
     for k, letter in ipairs(self.strings[self.focused_string].letters) do
-    	if Big then
-    		letter.dims.x = to_big(letter.dims.x):to_number()
-    		letter.dims.y = to_big(letter.dims.y):to_number()
-    		letter.offset.x = to_big(letter.offset.x):to_number()
-    		letter.offset.y = to_big(letter.offset.y):to_number()
-    	end
+    if Big then
+    	letter.dims.x = to_big(letter.dims.x):to_number()
+    	letter.dims.y = to_big(letter.dims.y):to_number()
+    	letter.offset.x = to_big(letter.offset.x):to_number()
+    	letter.offset.y = to_big(letter.offset.y):to_number()
+    end
         local real_pop_in = self.config.min_cycle_time == 0 and 1 or letter.pop_in
-        _shadow_norm.x = to_number(_shadow_norm.x)
-        letter.offset.x = to_number(letter.offset.x)
-        letter.dims.x = to_number(letter.dims.x)
-        _shadow_norm.y = to_number(_shadow_norm.y)
-        letter.offset.y = to_number(letter.offset.y)
-        letter.dims.y = to_number(letter.dims.y)
-        letter.r= to_number(letter.r)
         love.graphics.setColor(letter.prefix or letter.suffix or letter.colour or self.colours[k%#self.colours + 1])
 
         love.graphics.draw(

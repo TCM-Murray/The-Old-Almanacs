@@ -1,4 +1,4 @@
-LOVELY_INTEGRITY = '2c01d6997d82ec53b1dc722b8f0f9f711954a28549961d327223311d0568e9d7'
+LOVELY_INTEGRITY = '0c67682f21c4b8981afc8a83c3201b6d5baf983aa408e6fbd75da5838873baf5'
 
 --Moves the tutorial to the next step in queue
 --
@@ -3329,6 +3329,7 @@ G.FUNCS.wipe_on = function(message, no_card, timefac, alt_colour)
     white = {1, 1, 1, 1}
   }
   if not no_card then 
+    Jen.initialising = true
     G.screenwipecard = Card(1, 1, G.CARD_W, G.CARD_H, pseudorandom_element(G.P_CARDS), G.P_CENTERS.c_base)
     G.screenwipecard.sprite_facing = 'back'
     G.screenwipecard.facing = 'back'
