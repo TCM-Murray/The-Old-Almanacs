@@ -1,11 +1,6 @@
 --Brought to you by the same person who made the quote "The Dark Ages of smods"
+	-- Re-brought to you by some guy who restored this modpack from the ashes.
 
--- Performance Optimizations (v2025.01.19):
--- - Removed UI ping/sound from Wondergeist jokers for faster processing
--- - Optimized Black Hole performance with immediate processing and reduced delays
--- - Added exponential batch processing for Wondergeist operations
--- - Skipped expensive operations during Black Hole processing
--- - Fixed circular reference in level_up_hand to prevent event queue buildup
 
 -- Ensure global Jen table exists even if TOML init patch is absent
 Jen = Jen or {}
@@ -4242,7 +4237,7 @@ SMODS.Edition{
 	calculate = function(self, card, context)
 		local retriggers = self.config.retriggers
 		if context.edition and context.cardarea == G.jokers and context.joker_main and context.other_joker == self then
-			return { retriggers = self.config.retriggers}
+			return { repetitions = self.config.retriggers}
 		end
 		if context.repetition and context.cardarea == G.play then
 			return {repetitions = self.config.retriggers}
@@ -9901,6 +9896,8 @@ SMODS.Joker {
     end,
 	calculate = function(self, card, context)
         if not context.blueprint and jl.njr(context) and context.using_consumeable and context.consumeable and context.consumeable:gc().key == 'c_cry_gateway' then
+			if context.consumeable._saint_karma_done then return nil, true end
+			context.consumeable._saint_karma_done = true
 			local quota = context.consumeable:getEvalQty()
 			card.ability.extra.karma = card.ability.extra.karma + quota
 			card_eval_status_text(card, 'extra', nil, nil, nil, {message = '+' .. quota .. ' Karma', colour = G.C.PALE_GREEN})

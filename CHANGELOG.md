@@ -2,6 +2,16 @@
 
 All notable changes to Jen Almanac's Modpack will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+#### Jen Almanac (`Jen/Jen.lua`)
+- **Retrigger Edition repetitions field typo**: Fixed Retrigger Edition returning `retriggers` instead of `repetitions` field in effect table, preventing log warnings during retrigger checks.
+- **The Saint double trigger on Gateway**: Added `_saint_karma_done` flag check to prevent The Saint from triggering twice per Gateway consumable use, matching the pattern used by other Jokers like P03.
+
+---
+
 ## [0.0.8-v4]
 
 ### Fixed
