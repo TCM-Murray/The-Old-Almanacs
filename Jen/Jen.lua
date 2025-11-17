@@ -23265,3 +23265,42 @@ if Cryptid and jl then
 else
     print('[JEN DEBUG] Cryptid or JenLib not available for module-level init')
 end
+
+-- On game load, check if P03 is in deck and update exotic blacklist accordingly
+-- Hook into the game's start_run function to check for P03 on save load
+local jen_original_start_run = Game.start_run
+function Game:start_run(args)
+    local result = jen_original_start_run(self, args)
+    
+    print('[JEN DEBUG] start_run called - checking for P03')
+    
+    -- Use a deferred event to check after everything is loaded
+    G.E_MANAGER:add_event(Event({
+        func = function()
+            if Cryptid and Cryptid.pointerblistifytype then
+                local has_p03 = false
+                if G and G.jokers and G.jokers.cards then
+                    print('[JEN DEBUG] Checking ' .. #G.jokers.cards .. ' jokers for P03 on load')
+                    for _, card in ipairs(G.jokers.cards) do
+                        if card and card.config and card.config.center and card.config.center.key == 'j_jen_p03' then
+                            has_p03 = true
+                            print('[JEN DEBUG] Found P03 in deck on load!')
+                            break
+                        end
+                    end
+                end
+                
+                if has_p03 then
+                    Cryptid.pointerblistifytype("rarity", "cry_exotic", true)
+                    print('[JEN DEBUG] Save load: P03 found - enabled Exotic creation')
+                else
+                    Cryptid.pointerblistifytype("rarity", "cry_exotic", false)
+                    print('[JEN DEBUG] Save load: No P03 - disabled Exotic creation')
+                end
+            end
+            return true
+        end
+    }))
+    
+    return result
+end

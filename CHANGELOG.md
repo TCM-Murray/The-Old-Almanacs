@@ -56,6 +56,7 @@ All notable changes to Jen Almanac's Modpack will be documented in this file.
 - **Pointer functions not running** - Moved setup from `process_loc_text()` to module-level execution at file load time
 - **Module availability timing** - Added comprehensive debug logging and checks for Cryptid function existence
 - **P03 functional enhancement** - Original compat mod had non-functional P03 description; now actually controls exotic availability
+- **P03 save load persistence** - Hooked into `Game.start_run` to check for P03 presence on save load and restore exotic creation state accordingly
 
 ### Removed
 
