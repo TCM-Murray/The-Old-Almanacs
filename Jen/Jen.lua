@@ -98,6 +98,11 @@ local function init_jen_safety_systems()
             return _orig_highlight_card(card, ...)
         end
     end
+    
+    -- Initialize Cryptid compatibility functions (gameset, encoded deck, etc.)
+    if jl and jl.init_all_cryptid_compat then
+        jl.init_all_cryptid_compat()
+    end
 	
     -- Ensure Crimbo/Faceless extra scoring cards are injected even without TOML patch
     if SMODS and SMODS.calculate_main_scoring and not Jen._wrapped_calc_main then
@@ -23200,4 +23205,23 @@ function SMODS.current_mod.process_loc_text()
 	}
 	G.localization.misc.dictionary["b_suits"] = "Suits"
 	G.localization.misc.dictionary["b_ranks"] = "Ranks"
+	
+	-- Cryptid POINTER:// compatibility - set localization for pointer description
+	-- This allows POINTER:// to show correct description for Jen cards
+	if Cryptid then
+		G.localization.descriptions.Other["jen_pointer"] = {
+			name = "POINTER://",
+			text = {
+				"Create a card",
+				"of {C:cry_code}your choice",
+				"{C:inactive,s:0.8}(Exotic Jokers and OMEGA consumables excluded)",
+			},
+		}
+	end
+	
+	-- Initialize Cryptid pointer aliases after all cards are loaded
+	if jl and jl.setup_pointer_aliases and jl.setup_pointer_blacklist then
+		jl.setup_pointer_blacklist()
+		jl.setup_pointer_aliases()
+	end
 end

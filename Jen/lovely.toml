@@ -874,6 +874,7 @@ payload = '''
                     emboss = 0.05,
                     align = 'cm',
                     cover_align = 'cl'
+
                 })
             end'''
 match_indent = true
@@ -894,3 +895,65 @@ pattern = '''if booster_obj.create_card and type(booster_obj.create_card) == "fu
 position = "at"
 payload = '''if booster_obj and booster_obj.create_card and type(booster_obj.create_card) == "function" then'''
 match_indent = true
+
+# ========================================
+# CRYPTID COMPATIBILITY PATCHES
+# Integrated from CryptidAlmanacCompat mod
+# ========================================
+
+# Code card fallback - prevents crashes with missing code cards
+[[patches]]
+[patches.pattern]
+target = '''=[SMODS Cryptid "items/code.lua"]'''
+pattern = '''default = "c_cry_crash",'''
+position = "at"
+payload = '''default = "c_cry_oboe",'''
+match_indent = true
+
+# Profile names - change prefix from M to J for Jen
+[[patches]]
+[patches.pattern]
+target = "game.lua"
+pattern = 'Cryptid.profile_prefix = "M"'
+position = "at"
+payload = 'Cryptid.profile_prefix = "J"'
+match_indent = true
+
+# Tutorial auto-skip - automatically complete Cryptid intro and set gameset to madness
+[[patches]]
+[patches.pattern]
+target = '''=[SMODS Cryptid "lib/gameset.lua"]'''
+pattern = '''if not G.SETTINGS.paused and not G.PROFILES[G.SETTINGS.profile].cry_intro_complete then'''
+position = "before"
+payload = '''G.selectedGameset = "madness"
+G.PROFILES[G.SETTINGS.profile].cry_intro_complete = true
+G.PROFILES[G.SETTINGS.profile].cry_gameset = G.selectedGameset
+G.SETTINGS.paused = false
+if G.gamesetUI then
+    G.gamesetUI:remove()
+end
+if G.gateway then
+    G.gateway:remove()
+end
+if G.yawetag then
+    G.yawetag:remove()
+end
+G.E_MANAGER:clear_queue("tutorial")
+if G.OVERLAY_TUTORIAL then
+    G.OVERLAY_TUTORIAL.Jimbo:remove()
+    if G.OVERLAY_TUTORIAL.content then
+        G.OVERLAY_TUTORIAL.content:remove()
+    end
+end
+'''
+match_indent = true
+
+# Pointer patches - remove exotic from blist (handled in Lua now, but keeping for compatibility)
+[[patches]]
+[patches.pattern]
+target = '''=[SMODS Cryptid "items/pointer.lua"]'''
+pattern = '''Cryptid.pointerblistifytype("rarity", "cry_exotic", nil)'''
+position = "at"
+payload = ''' '''
+match_indent = true
+

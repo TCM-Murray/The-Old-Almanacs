@@ -6,7 +6,7 @@
 --- MOD_DESCRIPTION: Some functions that I commonly use which some people might find a use for
 --- BADGE_COLOR: 000000
 --- PREFIX: jenlib
---- VERSION: 0.4.0
+--- VERSION: 0.4.1
 --- LOADER_VERSION_GEQ: 1.0.0
 
 --Global table, don't modify!
@@ -1322,4 +1322,215 @@ end
 -- Safe color helper - ensures color values are never nil
 function jl.safe_color(color)
     return color or G.C.WHITE or {1, 1, 1, 1}
+end
+
+-- ========================================
+-- CRYPTID COMPATIBILITY SYSTEM
+-- ========================================
+
+-- Initialize Cryptid compatibility functions
+-- These functions integrate Jen with Cryptid's systems
+function jl.init_cryptid_compat()
+    if not Cryptid then return end
+    
+    print("[JEN DEBUG] Initializing Cryptid compatibility")
+    
+    -- Override gameset function to force "madness" gameset for Jen cards
+    -- This prevents users from seeing the gameset selector UI
+    local original_gameset = Cryptid.gameset
+    function Cryptid.gameset(card, center)
+        -- Check if this is a Jen-related card
+        if card and card.config and card.config.center then
+            local key = card.config.center.key
+            if key and (key:sub(1, 6) == "j_jen_" or key:sub(1, 6) == "c_jen_" or 
+                        key:sub(1, 6) == "v_jen_" or key:sub(1, 6) == "b_jen_") then
+                return "madness"
+            end
+        end
+        if center and center.key then
+            local key = center.key
+            if key:sub(1, 6) == "j_jen_" or key:sub(1, 6) == "c_jen_" or 
+               key:sub(1, 6) == "v_jen_" or key:sub(1, 6) == "b_jen_" then
+                return "madness"
+            end
+        end
+        return original_gameset(card, center)
+    end
+    
+    -- Disable gameset toggle UI globally
+    -- This is set in compat.lua line 34
+    if Cryptid_config then
+        Cryptid_config.gameset_toggle = false
+    end
+end
+
+-- Setup pointer blacklist for Jen cards
+-- Prevents Jen's custom rarities and omega consumables from appearing in POINTER://
+function jl.setup_pointer_blacklist()
+    if not Cryptid or not Cryptid.pointerblistifytype then return end
+    
+    print("[JEN DEBUG] Setting up Cryptid POINTER:// blacklist for Jen items")
+    
+    -- Blacklist Jen custom rarities
+    Cryptid.pointerblistifytype("rarity", "jen_wondrous")
+    Cryptid.pointerblistifytype("rarity", "jen_extraordinary")
+    Cryptid.pointerblistifytype("rarity", "jen_ritualistic")
+    Cryptid.pointerblistifytype("rarity", "jen_transcendent")
+    Cryptid.pointerblistifytype("rarity", "jen_omegatranscendent")
+    Cryptid.pointerblistifytype("rarity", "jen_omnipotent")
+    Cryptid.pointerblistifytype("rarity", "jen_miscellaneous")
+    Cryptid.pointerblistifytype("rarity", "jen_junk")
+    
+    -- Blacklist Jen omega consumables
+    Cryptid.pointerblistifytype("set", "jen_omegaconsumable")
+end
+
+-- Setup pointer aliases for easy creation of Jen cards via POINTER://
+-- Allows shortened names like "kosmos" instead of full card keys
+function jl.setup_pointer_aliases()
+    if not Cryptid or not Cryptid.pointeraliasify then return end
+    
+    print("[JEN DEBUG] Setting up Cryptid POINTER:// aliases for Jen cards")
+    
+    -- Specific card aliases
+    local aliases = {
+        -- Example joker
+        kosmos = "j_jen_kosmos",
+        -- Characters
+        freddy = "freddy snowshoe",
+        paupovlin = "paupovlin revere",
+        poppin = "paupovlin revere",
+        dandy = 'Dandicus "Dandy" Dancifer',
+        jen = "jen walter",
+        jen2 = "Jen Walter the Wondergeist",
+        jen3 = "Jen Walter the Wondergeist (Ascended)",
+        -- Rainworld characters
+        survivor = "the survivor",
+        monk = "the monk",
+        hunter = "the hunter",
+        gourmand = "the gourmand",
+        saint = "the saint",
+        -- Tarot/Spectral reverse cards
+        genius = "the genius",
+        r_fool = "the genius",
+        scientist = "the scientist",
+        r_magician = "the scientist",
+        lowlaywoman = "the low laywoman",
+        laywoman = "the low laywoman",
+        r_priestess = "the low laywoman",
+        peasant = "the peasant",
+        r_empress = "the peasant",
+        servant = "the servant",
+        r_emperor = "the servant",
+        adversary = "the adversary",
+        r_hierophant = "the adversary",
+        rivals = "the rivals",
+        r_lovers = "the rivals",
+        hitchhiker = "the hitchhiker",
+        r_chariot = "the hitchhiker",
+        injustice = "c_jen_reverse_justice",
+        r_justice = "c_jen_reverse_justice",
+        extrovert = "the extrovert",
+        r_hermit = "the extrovert",
+        discofpenury = "the disc of penury",
+        r_wheeloffortune = "the disc of penury",
+        r_wof = "the disc of penury",
+        infirmity = "infirmity",
+        r_strength = "infirmity",
+        zen = "zen",
+        r_hangedman = "zen",
+        life = "life",
+        r_death = "life",
+        prodigality = "prodigality",
+        r_temperance = "prodigality",
+        angel = "the angel",
+        r_devil = "the angel",
+        collapse = "the collapse",
+        r_tower = "the collapse",
+        flash = "the flash",
+        r_star = "the flash",
+        eclipsespectral = "c_jen_reverse_moon",
+        eclipsetorat = "c_jen_reverse_moon",
+        r_moon = "c_jen_reverse_moon",
+        darkness = "the darkness",
+        r_sun = "the darkness",
+        cunctation = "cunctation",
+        r_judgement = "cunctation",
+        desolate = "desolate",
+        r_world = "desolate",
+        -- Jen tokens
+        topuptoken = "top-up token",
+        sagittarius = "sagittarius a*",
+        ["sagitarius a*"] = "sagittarius a*", -- minor spelling mistakes forgiven
+        sagitarius = "sagittarius a*", -- minor spelling mistakes forgiven
+    }
+    
+    -- Register all aliases
+    for alias, target in pairs(aliases) do
+        Cryptid.pointeraliasify(alias, target)
+    end
+end
+
+-- Safe update_hand_text wrapper
+-- Ensures vals.colour is always set to prevent crashes
+local original_update_hand_text = nil
+
+function jl.wrap_update_hand_text()
+    if original_update_hand_text then return end  -- Already wrapped
+    
+    original_update_hand_text = update_hand_text
+    function update_hand_text(config, vals)
+        if not vals.colour then
+            vals.colour = G.C.UI.TEXT_DARK
+        end
+        return original_update_hand_text(config, vals)
+    end
+    
+    print("[JEN DEBUG] Wrapped update_hand_text for safety")
+end
+
+-- Setup Cryptid encoded deck compatibility
+function jl.setup_encoded_deck()
+    if not SMODS or not SMODS.Back then return end
+    
+    print("[JEN DEBUG] Setting up Cryptid Encoded deck compatibility")
+    
+    -- Take ownership of encoded deck to modify its behavior
+    SMODS.Back:take_ownership("b_cry_encoded", {
+        apply = function(self)
+            G.GAME.joker_rate = 1
+            G.GAME.planet_rate = 1
+            G.GAME.tarot_rate = 1
+            G.GAME.code_rate = 1e100
+            G.E_MANAGER:add_event(Event({
+                func = function()
+                    if G.jokers then
+                        if G.P_CENTERS["j_cry_CodeJoker"]
+                            and (G.GAME.banned_keys and not G.GAME.banned_keys["j_cry_CodeJoker"]) then
+                            local card = create_card("Joker", G.jokers, nil, nil, nil, nil, "j_cry_CodeJoker")
+                            card:add_to_deck()
+                            card:start_materialize()
+                            G.jokers:emplace(card)
+                        end
+                        return true
+                    end
+                end,
+            }))
+        end,
+    })
+end
+
+-- Initialize all Cryptid compatibility features
+function jl.init_all_cryptid_compat()
+    if not Cryptid then 
+        print("[JEN DEBUG] Cryptid not detected, skipping compatibility setup")
+        return 
+    end
+    
+    jl.init_cryptid_compat()
+    jl.setup_encoded_deck()
+    jl.wrap_update_hand_text()
+    
+    -- Note: Pointer blacklist and aliases should be called after Jen's cards are loaded
+    -- This will be done from Jen's main file
 end
