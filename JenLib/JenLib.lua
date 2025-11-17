@@ -1493,6 +1493,12 @@ end
 function jl.setup_encoded_deck()
     if not SMODS or not SMODS.Back then return end
     
+    -- Check if the encoded deck exists before trying to take ownership
+    if not SMODS.Back.obj_buffer or not SMODS.Back.obj_buffer["b_cry_encoded"] then
+        print("[JEN DEBUG] Cryptid Encoded deck not found, skipping setup")
+        return
+    end
+    
     print("[JEN DEBUG] Setting up Cryptid Encoded deck compatibility")
     
     -- Take ownership of encoded deck to modify its behavior
