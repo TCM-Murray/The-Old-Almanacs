@@ -10,7 +10,7 @@ This repository has only bugfixes in mind. I do not have in mind to add new mods
 Currently focused on **fixing bugs and resolving incompatibilities** within Jen Almanac's modpack and its dependencies.
 Current Jen Almanac's version is `0.0.8`.
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed bugfix history.
+Finished refactoring Jen. See [CHANGELOG.md](CHANGELOG.md) for detailed bugfix history.
 
 ## Features
 
