@@ -2,6 +2,104 @@
 
 All notable changes to Jen Almanac's Modpack will be documented in this file.
 
+## [28/11/2025]
+
+### Changed
+
+#### Jen Almanac - Major Architecture Refactoring
+
+**Complete modular restructuring of the Jen mod from monolithic architecture to organized module system.**
+
+The entire mod has been refactored from a single large `Jen.lua` file (~29,000+ lines) into a clean modular structure for better maintainability, readability, and development workflow.
+
+##### New Directory Structure
+
+```
+Jen/
+├── Jen.lua                 # Lightweight entry point (module loader)
+├── core/                   # Core systems (13 modules)
+│   ├── init.lua            # Globals, safety patches, Jen table setup
+│   ├── config.lua          # Configuration and locale colors
+│   ├── utils.lua           # Helper functions (text formatting, roman numerals, credits)
+│   ├── hooks.lua           # Game lifecycle hooks and overrides
+│   ├── operator.lua        # Operator display system (×, ^, ^^, ^^^)
+│   ├── malice.lua          # Malice/Kosmos system
+│   ├── straddle.lua        # Straddle mechanics
+│   ├── economy.lua         # Dollar/tension/relief system
+│   ├── suits_ranks.lua     # Suit/Rank leveling UI
+│   ├── ui.lua              # UI helpers and components
+│   ├── safety.lua          # Safety patches and crash prevention
+│   ├── bans.lua            # Card ban system
+│   └── fusion.lua          # Fusion system
+└── content/                # Game content definitions (10 modules)
+    ├── atlases.lua         # SMODS.Atlas definitions
+    ├── sounds.lua          # SMODS.Sound definitions
+    ├── consumable_types.lua # SMODS.ConsumableType definitions
+    ├── editions.lua        # SMODS.Edition definitions
+    ├── decks.lua           # SMODS.Back definitions
+    ├── enhancements.lua    # SMODS.Enhancement definitions
+    ├── jokers.lua          # SMODS.Joker definitions (~6900 lines)
+    ├── consumables.lua     # SMODS.Consumable definitions (+ Boosters)
+    ├── blinds.lua          # SMODS.Blind definitions
+    └── vouchers.lua        # SMODS.Voucher definitions
+```
+
+##### Module Loading System
+
+- **`Jen.lua`**: Now a lightweight ~320 line entry point that:
+  - Defines `safe_load()` function using `SMODS.load_file()` API
+  - Loads all core modules in dependency order
+  - Loads all content modules
+  - Provides configuration tab UI
+
+##### Core Modules Breakdown
+
+| Module | Purpose |
+|--------|---------|
+| `init.lua` | Jen table initialization, global constants, Incantation/Aurinko addon setup |
+| `config.lua` | `Jen.config` loading, `locale_colours`, texture pack settings |
+| `utils.lua` | `checkerboard_text()`, `roman()`, `faceart()`, `spriter()`, `caption()`, `lore()` helpers |
+| `hooks.lua` | `Game:start_run`, `Game:init_game_object` hooks, Wondergeist job processor, UI safety patches |
+| `operator.lua` | `update_operator_display()`, chip×mult operator rendering system |
+| `malice.lua` | Malice/Kosmos mechanics and calculations |
+| `straddle.lua` | Straddle system implementation |
+| `economy.lua` | Tension/Relief economy system |
+| `suits_ranks.lua` | `ui_suits_ranks()` UI, suit/rank leveling display |
+| `ui.lua` | UI component helpers, pack/voucher buttons |
+| `safety.lua` | `Jen.init_safety_systems()`, crash prevention, metatable patches |
+| `bans.lua` | `init_cardbans()`, `Jen:delete_hardbans()` |
+| `fusion.lua` | Joker fusion system |
+
+##### Content Modules Breakdown
+
+| Module | Purpose |
+|--------|---------|
+| `atlases.lua` | All `SMODS.Atlas` definitions for sprites |
+| `sounds.lua` | All `SMODS.Sound` definitions |
+| `consumable_types.lua` | Custom consumable types: `jen_ability`, `jen_omegaconsumable`, `jen_tokens`, `jen_uno` |
+| `editions.lua` | All `SMODS.Edition` definitions (Wee, Jumbo, Bismuth, etc.) |
+| `decks.lua` | All `SMODS.Back` definitions |
+| `enhancements.lua` | All `SMODS.Enhancement` definitions |
+| `jokers.lua` | All `SMODS.Joker` definitions (largest file, ~6900 lines) |
+| `consumables.lua` | All `SMODS.Consumable` definitions + Booster packs |
+| `blinds.lua` | All `SMODS.Blind` definitions (Boss/Epic blinds) |
+| `vouchers.lua` | All `SMODS.Voucher` definitions |
+
+### Removed
+
+#### Jen Almanac
+- **`JenRevision.lua`**: Deleted - revision tracking no longer needed with git
+- **`OLD FILES/` directory**: Deleted - legacy backups (`Jen v2 copy.lua`, old `Jen.lua`, old `lovely.toml`)
+
+**Migration Notes:**
+- All functionality preserved (As far as I know)- no gameplay changes yet
+- Load order carefully managed via `safe_load()` sequence
+- Global functions remain global for content file compatibility
+- Configuration tab moved to main `Jen.lua` entry point
+- Someone end me.
+
+---
+
 ## [22/11/2025]
 
 ### Fixed

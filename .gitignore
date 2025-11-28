@@ -6,3 +6,6 @@ lovely/
 .DS_Store
 Thumbs.db
 
+# Backup files
+Jen/OldJen.lua.backup
+

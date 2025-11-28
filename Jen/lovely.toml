@@ -19,13 +19,14 @@ position = "at"
 payload = ""
 match_indent = true
 
-[[patches]]
-[patches.pattern]
-target = "functions/common_events.lua"
-pattern = "if amt > 0 or amt < 0 then"
-position = "at"
-payload = "if to_big(amt) > to_big(0) or to_big(amt) < to_big(0) then"
-match_indent = true
+# COMMENTED OUT: Talisman already patches this for big numbers
+# [[patches]]
+# [patches.pattern]
+# target = "functions/common_events.lua"
+# pattern = "if amt > 0 or amt < 0 then"
+# position = "at"
+# payload = "if to_big(amt) > to_big(0) or to_big(amt) < to_big(0) then"
+# match_indent = true
 
 # COMMENTED OUT: Hand level color patches - now handled by jl.init_hand_level_colors() metatable system
 # [[patches]]
@@ -60,21 +61,22 @@ position = "at"
 payload = "if self.strings and self.focused_string and self.strings[self.focused_string] and self.strings[self.focused_string].string then self.string = self.strings[self.focused_string].string else return end"
 match_indent = true
 
-[[patches]]
-[patches.regex]
-target = "functions/state_events.lua"
-pattern = '''hand_chips\*mult'''
-position = "at"
-payload = "get_chipmult_sum(hand_chips, mult)"
-match_indent = true
+# COMMENTED OUT: Talisman already handles scoring calculation with big numbers
+# [[patches]]
+# [patches.regex]
+# target = "functions/state_events.lua"
+# pattern = '''hand_chips\*mult'''
+# position = "at"
+# payload = "get_chipmult_sum(hand_chips, mult)"
+# match_indent = true
 
-[[patches]]
-[patches.regex]
-target = "functions/state_events.lua"
-pattern = '''to_big\(hand_chips\)\*mult'''
-position = "at"
-payload = "get_chipmult_sum(hand_chips, mult)"
-match_indent = true
+# [[patches]]
+# [patches.regex]
+# target = "functions/state_events.lua"
+# pattern = '''to_big\(hand_chips\)\*mult'''
+# position = "at"
+# payload = "get_chipmult_sum(hand_chips, mult)"
+# match_indent = true
 
 [[patches]]
 [patches.pattern]
@@ -225,21 +227,22 @@ position = "after"
 payload = "op = self.HUD:get_UIE_by_ID('chipmult_op'),"
 match_indent = true
 
-[[patches]]
-[patches.pattern]
-target = "functions/UI_definitions.lua"
-pattern = 'button = not G.SETTINGS.tutorial_complete and "start_run" or "setup_run"'
-position = "at"
-payload = 'func = "isomeganumenabled", button = not G.SETTINGS.tutorial_complete and "start_run" or "setup_run"'
-match_indent = true
+# COMMENTED OUT: Game code changed, patterns no longer match
+# [[patches]]
+# [patches.pattern]
+# target = "functions/UI_definitions.lua"
+# pattern = 'button = not G.SETTINGS.tutorial_complete and "start_run" or "setup_run"'
+# position = "at"
+# payload = 'func = "isomeganumenabled", button = not G.SETTINGS.tutorial_complete and "start_run" or "setup_run"'
+# match_indent = true
 
-[[patches]]
-[patches.pattern]
-target = "functions/UI_definitions.lua"
-pattern = "label = {localize('b_play_cap')}"
-position = "at"
-payload = "label = {(Big and Big.arrow) and localize('b_play_cap') or 'OMEGANUM NOT ENABLED, GO TO TALISMAN SETTINGS'}"
-match_indent = true
+# [[patches]]
+# [patches.pattern]
+# target = "functions/UI_definitions.lua"
+# pattern = "label = {localize('b_play_cap')}"
+# position = "at"
+# payload = "label = {(Big and Big.arrow) and localize('b_play_cap') or 'OMEGANUM NOT ENABLED, GO TO TALISMAN SETTINGS'}"
+# match_indent = true
 
  
 
@@ -442,35 +445,35 @@ payload = '''
 match_indent = true
 overwrite = false
 
-# non-functional patch
-[[patches]]
-[patches.pattern]
-target = "functions/common_events.lua"
-pattern = '''
-        local chips = card:get_chip_bonus()
-        if chips > 0 then 
-            ret.chips = chips
-        end
-
-        local mult = card:get_chip_mult()
-        if mult > 0 then 
-            ret.mult = mult
-        end
-'''
-position = "at"
-payload = '''
-        local chips = card:get_chip_bonus()
-        if to_big(chips) > to_big(0) then 
-            ret.chips = chips
-        end
-
-        local mult = card:get_chip_mult()
-        if to_big(mult) > to_big(0) then 
-            ret.mult = mult
-        end --jen was here
-'''
-match_indent = true
-overwrite = false
+# COMMENTED OUT: Non-functional patch, whitespace/code structure changed
+# [[patches]]
+# [patches.pattern]
+# target = "functions/common_events.lua"
+# pattern = '''
+#         local chips = card:get_chip_bonus()
+#         if chips > 0 then 
+#             ret.chips = chips
+#         end
+#
+#         local mult = card:get_chip_mult()
+#         if mult > 0 then 
+#             ret.mult = mult
+#         end
+# '''
+# position = "at"
+# payload = '''
+#         local chips = card:get_chip_bonus()
+#         if to_big(chips) > to_big(0) then 
+#             ret.chips = chips
+#         end
+#
+#         local mult = card:get_chip_mult()
+#         if to_big(mult) > to_big(0) then 
+#             ret.mult = mult
+#         end --jen was here
+# '''
+# match_indent = true
+# overwrite = false
 
 [[patches]]
 [patches.pattern]
