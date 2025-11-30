@@ -16,32 +16,32 @@ The entire mod has been refactored from a single large `Jen.lua` file (~29,000+ 
 
 ```
 Jen/
-├── Jen.lua                 # Lightweight entry point (module loader)
-├── core/                   # Core systems (13 modules)
-│   ├── init.lua            # Globals, safety patches, Jen table setup
-│   ├── config.lua          # Configuration and locale colors
-│   ├── utils.lua           # Helper functions (text formatting, roman numerals, credits)
-│   ├── hooks.lua           # Game lifecycle hooks and overrides
-│   ├── operator.lua        # Operator display system (×, ^, ^^, ^^^)
-│   ├── malice.lua          # Malice/Kosmos system
-│   ├── straddle.lua        # Straddle mechanics
-│   ├── economy.lua         # Dollar/tension/relief system
-│   ├── suits_ranks.lua     # Suit/Rank leveling UI
-│   ├── ui.lua              # UI helpers and components
-│   ├── safety.lua          # Safety patches and crash prevention
-│   ├── bans.lua            # Card ban system
-│   └── fusion.lua          # Fusion system
-└── content/                # Game content definitions (10 modules)
-    ├── atlases.lua         # SMODS.Atlas definitions
-    ├── sounds.lua          # SMODS.Sound definitions
+├── Jen.lua                  # Lightweight entry point (module loader)
+├── core/                    # Core systems (13 modules)
+│   ├── init.lua             # Globals, safety patches, Jen table setup
+│   ├── config.lua           # Configuration and locale colors
+│   ├── utils.lua            # Helper functions (text formatting, roman numerals, credits)
+│   ├── hooks.lua            # Game lifecycle hooks and overrides
+│   ├── operator.lua         # Operator display system (×, ^, ^^, ^^^)
+│   ├── malice.lua           # Malice/Kosmos system
+│   ├── straddle.lua         # Straddle mechanics
+│   ├── economy.lua          # Dollar/tension/relief system
+│   ├── suits_ranks.lua      # Suit/Rank leveling UI
+│   ├── ui.lua               # UI helpers and components
+│   ├── safety.lua           # Safety patches and crash prevention
+│   ├── bans.lua             # Card ban system
+│   └── fusion.lua           # Fusion system
+└── content/                 # Game content definitions (10 modules)
+    ├── atlases.lua          # SMODS.Atlas definitions
+    ├── sounds.lua           # SMODS.Sound definitions
     ├── consumable_types.lua # SMODS.ConsumableType definitions
-    ├── editions.lua        # SMODS.Edition definitions
-    ├── decks.lua           # SMODS.Back definitions
-    ├── enhancements.lua    # SMODS.Enhancement definitions
-    ├── jokers.lua          # SMODS.Joker definitions (~6900 lines)
-    ├── consumables.lua     # SMODS.Consumable definitions (+ Boosters)
-    ├── blinds.lua          # SMODS.Blind definitions
-    └── vouchers.lua        # SMODS.Voucher definitions
+    ├── editions.lua         # SMODS.Edition definitions
+    ├── decks.lua            # SMODS.Back definitions
+    ├── enhancements.lua     # SMODS.Enhancement definitions
+    ├── jokers.lua           # SMODS.Joker definitions (~6900 lines)
+    ├── consumables.lua      # SMODS.Consumable definitions (+ Boosters)
+    ├── blinds.lua           # SMODS.Blind definitions
+    └── vouchers.lua         # SMODS.Voucher definitions
 ```
 
 ##### Module Loading System
