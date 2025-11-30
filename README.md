@@ -39,8 +39,6 @@ The following mods are required for Jen Almanac's modpack to function:
 - **Nopeus** - Quality-of-life enhancements
 - **JenLib** - Jen Almanac library utilities
 
-All dependencies are included in this modpack and should not be manually installed. Do not update them manually.
-
 ## Troubleshooting
 
 **Having issues?** Here are some common solutions:
@@ -62,5 +60,7 @@ For bug reports, questions, or general support, please join our Discord server:
 
 *   **`main`**: This is the primary development branch. It contains the stable, working version of the modpack with the latest bugfixes.
 *   **`base`**: This branch holds the original, unmodified base modpack. It serves as a clean blueprint.
-*   **`experimental-updates`**: This branch is for testing updated mods. It has all Jen Almanac's dependencies updated (smods, Cryptid, Talisman, Cartomancer, MoreFluff). It is unstable and is not intended for general use. It is too complex for me to work on.
-*   **`jen-almanac-dependencies`**: This branch contains a stripped-down version of the modpack with only the essential dependencies for the "Jen Almanac's" mod. Those are updated as well, so it wont work either.
+
+## Modpack
+
+For an updated Modpack with the latest smods, Cryptid, and Talisman, visit this repository: https://github.com/marcovancampen/The-Old-Almanacs
