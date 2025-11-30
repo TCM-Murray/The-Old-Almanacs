@@ -992,7 +992,7 @@ in_pool = function()
     return #SMODS.find_card('j_jen_dealer') <= 0
 end,
 calculate = function(self, card, context)
-    if not context.blueprint then
+    if not context.blueprint and not context.repetition then
         if context.cardarea == G.play then
             if context.other_card and context.other_card.ability.name == 'Lucky Card' and jl.scj(context) then
                 if jl.chance('jen_luke_jokerslot', 5, true) then
@@ -1555,7 +1555,7 @@ loc_vars = function(self, info_queue, center)
     return {vars = {center.ability.mul, #SMODS.find_card('j_jen_cheese') > 0 and 'Wawa!' or ('Wawa.' .. (math.random(2) == 1 and '..' or ''))}}
 end,
 calculate = function(self, card, context)
-    if context.cardarea == G.play then
+    if context.cardarea == G.play and not context.repetition then
         local ret = {
             message = 'Wawa!',
             colour = G.C.MULT,
@@ -1944,7 +1944,7 @@ loc_vars = function(self, info_queue, center)
     return {vars = {G.GAME.probabilities.normal * 8.8}}
 end,
 calculate = function(self, card, context)
-    if context.cardarea == G.play then
+    if context.cardarea == G.play and not context.repetition then
         if context.other_card and not context.other_card:norank() and context.other_card:get_id() == 8 then
             return {
                 chip_mod = 88,
@@ -1984,7 +1984,7 @@ perishable_compat = false,
 immutable = true,
 atlas = 'jenmurphy',
 calculate = function(self, card, context)
-    if context.cardarea == G.play then
+    if context.cardarea == G.play and not context.repetition then
         if context.other_card and not context.other_card:norank() and context.other_card:get_id() == 9 then
             return {
                 ee_chips = 1.09,
@@ -2226,7 +2226,7 @@ loc_vars = function(self, info_queue, center)
     return {vars = {localize(jl.favhand(), 'poker_hands')}}
 end,
 calculate = function(self, card, context)
-    if context.cardarea == G.play then
+    if context.cardarea == G.play and not context.repetition then
         if context.other_card and context.other_card.ability.name == 'Gold Card' and context.other_card:get_id() == 7 then
             return {
                 message = '^7 Mult',
@@ -2266,7 +2266,7 @@ perishable_compat = false,
 immutable = true,
 atlas = 'jenhydrangea',
 calculate = function(self, card, context)
-    if context.cardarea == G.play then
+    if context.cardarea == G.play and not context.repetition then
         if context.other_card and not context.other_card:norank() and jl.scj(context) and context.other_card:get_id() == 7 then
             if (G.SETTINGS.FASTFORWARD or 0) < 1 and (G.SETTINGS.STATUSTEXT or 0) < 2 then
                 card_status_text(card, '-7% Blind Size', nil, 0.05*card.T.h, G.C.FILTER, 0.75, 1, 0.6, nil, 'bm', 'generic1')
@@ -3601,7 +3601,7 @@ remove_from_deck = function(self, card, from_debuff)
     card:grand_dad()
 end,
 calculate = function(self, card, context)
-    if context.cardarea == G.play then
+    if context.cardarea == G.play and not context.repetition then
         if context.other_card and context.other_card:get_id() == 7 and jl.scj(context) then
             card:grand_dad()
             local palette = granddad_palette[math.random(#granddad_palette)]
@@ -5208,14 +5208,21 @@ local lusr = level_up_suit
 
 function level_up_suit(card, suit, instant, amount, dontautoclear)
 amount = to_big(amount or 1)
+-- Ensure G.GAME.suits[suit] is initialized
+if not G.GAME or not G.GAME.suits then return end
+if not G.GAME.suits[suit] then
+    local cfg = Jen.config.suit_leveling[suit] or { chips = 1, mult = 1 }
+    G.GAME.suits[suit] = { level = to_big(1), chips = to_big(0), mult = to_big(0), l_chips = to_big(cfg.chips), l_mult = to_big(cfg.mult) }
+end
+local suit_data = G.GAME.suits[suit]
 if not instant then
-    jl.h(localize(suit, 'suits_plural'), G.GAME.suits[suit].chips, G.GAME.suits[suit].mult, G.GAME.suits[suit].level)
+    jl.h(localize(suit, 'suits_plural'), suit_data.chips, suit_data.mult, suit_data.level)
 end
 if lusr then lusr(card, suit, instant, amount) end
-G.GAME.suits[suit].level = math.max(G.GAME.suits[suit].level + amount, 0)
-G.GAME.suits[suit].chips = math.max(G.GAME.suits[suit].chips + (G.GAME.suits[suit].l_chips * amount), 0)
-G.GAME.suits[suit].mult = math.max(G.GAME.suits[suit].mult + (G.GAME.suits[suit].l_mult * amount), 0)
-manage_level_colour(G.GAME.suits[suit].level)
+suit_data.level = math.max(suit_data.level + amount, 0)
+suit_data.chips = math.max(suit_data.chips + (suit_data.l_chips * amount), 0)
+suit_data.mult = math.max(suit_data.mult + (suit_data.l_mult * amount), 0)
+manage_level_colour(suit_data.level)
 if amount > to_big(0) then
     add_malice(15 * amount)
 end
@@ -5227,7 +5234,7 @@ if not instant then
             G.TAROT_INTERRUPT_PULSE = true
             return true
         end, 0.2, nil, 'after')
-        jl.h(localize(suit, 'suits_plural'), G.GAME.suits[suit].chips, G.GAME.suits[suit].mult, G.GAME.suits[suit].level, true)
+        jl.h(localize(suit, 'suits_plural'), suit_data.chips, suit_data.mult, suit_data.level, true)
     else
         Q(function()
             play_sound('tarot1')
@@ -5235,20 +5242,20 @@ if not instant then
             G.TAROT_INTERRUPT_PULSE = true
             return true
         end, 0.2, nil, 'after')
-        jl.hm(G.GAME.suits[suit].mult, true)
+        jl.hm(suit_data.mult, true)
         Q(function()
             play_sound('tarot1')
             if card then card:juice_up(0.8, 0.5) end
             return true
         end, 0.9, nil, 'after')
-        jl.hc(G.GAME.suits[suit].chips, true)
+        jl.hc(suit_data.chips, true)
         Q(function()
             play_sound('tarot1')
             if card then card:juice_up(0.8, 0.5) end
             G.TAROT_INTERRUPT_PULSE = nil
             return true
         end, 0.9, nil, 'after')
-        jl.hlv(G.GAME.suits[suit].level)
+        jl.hlv(suit_data.level)
     end
     delay(1.3)
     if not dontautoclear then jl.ch() end
@@ -5259,14 +5266,21 @@ local lurr = level_up_rank
 
 function level_up_rank(card, rank, instant, amount, dontautoclear)
 amount = to_big(amount or 1)
+-- Ensure G.GAME.ranks[rank] is initialized
+if not G.GAME or not G.GAME.ranks then return end
+if not G.GAME.ranks[rank] then
+    local cfg = Jen.config.rank_leveling[rank] or { chips = 1, mult = 1 }
+    G.GAME.ranks[rank] = { level = to_big(1), chips = to_big(0), mult = to_big(0), l_chips = to_big(cfg.chips), l_mult = to_big(cfg.mult) }
+end
+local rank_data = G.GAME.ranks[rank]
 if not instant then
-    jl.h(rank .. 's', G.GAME.ranks[rank].chips, G.GAME.ranks[rank].mult, G.GAME.ranks[rank].level)
+    jl.h(rank .. 's', rank_data.chips, rank_data.mult, rank_data.level)
 end
 if lurr then lurr(card, rank, instant, amount) end
-G.GAME.ranks[rank].level = math.max(G.GAME.ranks[rank].level + amount, 0)
-G.GAME.ranks[rank].chips = math.max(G.GAME.ranks[rank].chips + (G.GAME.ranks[rank].l_chips * amount), 0)
-G.GAME.ranks[rank].mult = math.max(G.GAME.ranks[rank].mult + (G.GAME.ranks[rank].l_mult * amount), 0)
-manage_level_colour(G.GAME.ranks[rank].level)
+rank_data.level = math.max(rank_data.level + amount, 0)
+rank_data.chips = math.max(rank_data.chips + (rank_data.l_chips * amount), 0)
+rank_data.mult = math.max(rank_data.mult + (rank_data.l_mult * amount), 0)
+manage_level_colour(rank_data.level)
 if amount > to_big(0) then
     add_malice(15 * amount)
 end
@@ -5278,7 +5292,7 @@ if not instant then
             G.TAROT_INTERRUPT_PULSE = true
             return true
         end, 0.2, nil, 'after')
-        jl.h(rank .. 's', G.GAME.ranks[rank].chips, G.GAME.ranks[rank].mult, G.GAME.ranks[rank].level, true)
+        jl.h(rank .. 's', rank_data.chips, rank_data.mult, rank_data.level, true)
     else
         Q(function()
             play_sound('tarot1')
@@ -5286,20 +5300,20 @@ if not instant then
             G.TAROT_INTERRUPT_PULSE = true
             return true
         end, 0.2, nil, 'after')
-        jl.hm(G.GAME.ranks[rank].mult, true)
+        jl.hm(rank_data.mult, true)
         Q(function()
             play_sound('tarot1')
             if card then card:juice_up(0.8, 0.5) end
             return true
         end, 0.9, nil, 'after')
-        jl.hc(G.GAME.ranks[rank].chips, true)
+        jl.hc(rank_data.chips, true)
         Q(function()
             play_sound('tarot1')
             if card then card:juice_up(0.8, 0.5) end
             G.TAROT_INTERRUPT_PULSE = nil
             return true
         end, 0.9, nil, 'after')
-        jl.hlv(G.GAME.ranks[rank].level)
+        jl.hlv(rank_data.level)
     end
     delay(1.3)
     if not dontautoclear then jl.ch() end

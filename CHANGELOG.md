@@ -4,6 +4,29 @@ All notable changes to Jen Almanac's Modpack will be documented in this file.
 
 ## [30/11/2025]
 
+### Fixed
+
+#### Jen Almanac - Nil Access Crash Fixes
+
+**UNO Consumables (`content/consumables.lua`)**
+- **Fixed nil access crash in UNO card `loc_vars`**: The guard was checking if `G.GAME.suits` and `G.GAME.ranks` tables exist, but not verifying the specific rank/suit entries (`G.GAME.ranks[rank]`, `G.GAME.suits[suit]`). This caused crashes when hovering over UNO cards before game state was fully initialized. Now properly extracts and validates specific entries before accessing `.level`, `.l_chips`, `.l_mult`.
+
+**Suit/Rank Leveling Functions (`content/jokers.lua`)**
+- **Fixed `level_up_suit` and `level_up_rank` nil access crashes**: Both functions accessed `G.GAME.suits[suit]` and `G.GAME.ranks[rank]` without checking if entries exist. Added initialization guards that create missing entries using `Jen.config.suit_leveling` and `Jen.config.rank_leveling` defaults when needed.
+
+**Suits/Ranks UI (`core/suits_ranks.lua`)**
+- **Fixed Run Info > Suits/Ranks tab crash**: The `recalc_suitrank()` function accessed suit/rank data without verifying entries exist. Added `ensure_suit_data()` and `ensure_rank_data()` helper functions that initialize missing entries and provide fallback values.
+
+**Joker Repetition Context Fixes (`content/jokers.lua`)**
+- **Fixed "Found effect table with no assigned repetitions" warnings**: Several jokers were triggering on `context.cardarea == G.play` without filtering out `context.repetition`. When SMODS called these jokers during repetition checking, returned tables were incorrectly processed as retrigger results. Added `and not context.repetition` to the following jokers:
+  - **Jeremy** - gives mult/x_mult on scored cards
+  - **Luke** - grants slots/consumables on Lucky Cards
+  - **Toodles** - gives chips on 8s
+  - **Murphy** - gives ee_chips on 9s
+  - **Guilduryn** - gives e_mult on Gold 7s
+  - **Hydrangea** - reduces blind on 7s
+  - **Grand Dad** - random effects on 7s
+
 ### Removed
 
 #### Repository Cleanup

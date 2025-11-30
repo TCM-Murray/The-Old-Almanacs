@@ -4914,7 +4914,9 @@ for a, b in ipairs(uno_data.values) do
 			ignore_kudaai = true,
 			can_mass_use = true,
 			loc_vars = function(self, info_queue, center)
-				if not G.GAME or not (G.GAME or {}).suits or not (G.GAME or {}).ranks then
+				local rank_data = G.GAME and G.GAME.ranks and G.GAME.ranks[b]
+				local suit_data = G.GAME and G.GAME.suits and G.GAME.suits[d]
+				if not rank_data or not suit_data then
 					return {
 						vars = {
 							1,
@@ -4932,15 +4934,15 @@ for a, b in ipairs(uno_data.values) do
 				end
 				return {
 					vars = {
-						G.GAME.ranks[b].level,
-						G.GAME.ranks[b].l_chips,
-						G.GAME.ranks[b].l_mult,
-						G.GAME.suits[d].level,
-						G.GAME.suits[d].l_chips,
-						G.GAME.suits[d].l_mult,
+						rank_data.level,
+						rank_data.l_chips,
+						rank_data.l_mult,
+						suit_data.level,
+						suit_data.l_chips,
+						suit_data.l_mult,
 						colours = {
-							G.GAME.ranks[b].level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.ranks[b].level)] or G.C.HAND_LEVELS[number_format(G.GAME.ranks[b].level)] or G.C.UI.TEXT_DARK,
-							G.GAME.suits[d].level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(G.GAME.suits[d].level)] or G.C.HAND_LEVELS[number_format(G.GAME.suits[d].level)] or G.C.UI.TEXT_DARK
+							rank_data.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(rank_data.level)] or G.C.HAND_LEVELS[number_format(rank_data.level)] or G.C.UI.TEXT_DARK,
+							suit_data.level <= to_big(7200) and G.C.HAND_LEVELS['!' .. number_format(suit_data.level)] or G.C.HAND_LEVELS[number_format(suit_data.level)] or G.C.UI.TEXT_DARK
 						}
 					},
 				}

@@ -103,6 +103,25 @@ function Controller:key_press_update(key, dt)
   return ckpu(self, key, dt)
 end
 
+-- Helper to ensure suit/rank data exists
+local function ensure_suit_data(suit)
+  if not G.GAME or not G.GAME.suits then return nil end
+  if not G.GAME.suits[suit] then
+    local cfg = Jen.config.suit_leveling[suit] or { chips = 1, mult = 1 }
+    G.GAME.suits[suit] = { level = to_big(1), chips = to_big(0), mult = to_big(0), l_chips = to_big(cfg.chips), l_mult = to_big(cfg.mult) }
+  end
+  return G.GAME.suits[suit]
+end
+
+local function ensure_rank_data(rank)
+  if not G.GAME or not G.GAME.ranks then return nil end
+  if not G.GAME.ranks[rank] then
+    local cfg = Jen.config.rank_leveling[rank] or { chips = 1, mult = 1 }
+    G.GAME.ranks[rank] = { level = to_big(1), chips = to_big(0), mult = to_big(0), l_chips = to_big(cfg.chips), l_mult = to_big(cfg.mult) }
+  end
+  return G.GAME.ranks[rank]
+end
+
 -- Recalculate suit/rank display after selection change
 function recalc_suitrank()
   SMODS.change_base(G.suitrank.card, G.suitrank.suit, G.suitrank.rank)
@@ -116,24 +135,27 @@ function recalc_suitrank()
       G.suitrank.rankconfig[k] = {}
     end
   end
+  -- Ensure suit/rank data exists before accessing
+  local suit_data = ensure_suit_data(G.suitrank.suit) or { level = 1, chips = 0, mult = 0 }
+  local rank_data = ensure_rank_data(G.suitrank.rank) or { level = 1, chips = 0, mult = 0 }
   for i = 1, 4 do
     G.suitrank.suitconfig.color[i] = G.C.SUITS[G.suitrank.suit][i]
     G.suitrank.suitconfig.outline_color[i] = darken(G.C.SUITS[G.suitrank.suit], 0.3)[i]
-    G.suitrank.suitconfig.level_color[i] = G.C.HAND_LEVELS[number_format(G.GAME.suits[G.suitrank.suit].level)][i]
+    G.suitrank.suitconfig.level_color[i] = (G.C.HAND_LEVELS[number_format(suit_data.level)] or G.C.UI.TEXT_DARK)[i]
     G.suitrank.suitconfig.text_color[i] = lighten(G.C.SUITS[G.suitrank.suit], 0.6)[i]
     G.suitrank.rankconfig.color[i] = darken(G.C.SECONDARY_SET.Tarot, 0.3)[i]
     G.suitrank.rankconfig.outline_color[i] = darken(G.C.SECONDARY_SET.Tarot, 0.65)[i]
-    G.suitrank.rankconfig.level_color[i] = G.C.HAND_LEVELS[number_format(G.GAME.ranks[G.suitrank.rank].level)][i]
+    G.suitrank.rankconfig.level_color[i] = (G.C.HAND_LEVELS[number_format(rank_data.level)] or G.C.UI.TEXT_DARK)[i]
     G.suitrank.rankconfig.text_color[i] = lighten(G.C.SECONDARY_SET.Tarot, 0.6)[i]
   end
-  G.suitrank.suitconfig.level = localize('k_level_prefix')..number_format(G.GAME.suits[G.suitrank.suit].level)
+  G.suitrank.suitconfig.level = localize('k_level_prefix')..number_format(suit_data.level)
   G.suitrank.suitconfig.count = jl.countsuit()[G.suitrank.suit] or 0
-  G.suitrank.suitconfig.chips = "+"..number_format(G.GAME.suits[G.suitrank.suit].chips)
-  G.suitrank.suitconfig.mult = "+"..number_format(G.GAME.suits[G.suitrank.suit].mult)
-  G.suitrank.rankconfig.level = localize('k_level_prefix')..number_format(G.GAME.ranks[G.suitrank.rank].level)
+  G.suitrank.suitconfig.chips = "+"..number_format(suit_data.chips)
+  G.suitrank.suitconfig.mult = "+"..number_format(suit_data.mult)
+  G.suitrank.rankconfig.level = localize('k_level_prefix')..number_format(rank_data.level)
   G.suitrank.rankconfig.count = jl.countrank()[G.suitrank.rank] or 0
-  G.suitrank.rankconfig.chips = "+"..number_format(G.GAME.ranks[G.suitrank.rank].chips)
-  G.suitrank.rankconfig.mult = "+"..number_format(G.GAME.ranks[G.suitrank.rank].mult)
+  G.suitrank.rankconfig.chips = "+"..number_format(rank_data.chips)
+  G.suitrank.rankconfig.mult = "+"..number_format(rank_data.mult)
 end
 
 -- UI Construction for Suit/Rank Display
