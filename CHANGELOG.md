@@ -2,6 +2,16 @@
 
 All notable changes to Jen Almanac's Modpack will be documented in this file.
 
+## [30/11/2025]
+
+### Removed
+
+#### Repository Cleanup
+- **Removed non-Jen dependency mods from repository**: Deleted Blueprint, CardSleeves, Cartomancer, Galdur, HandyBalatro, MoreFluff, MoreJokerPacks, multipack, NotJustYet, SDM_0'sStuff, and Trance mods
+- **Deleted obsolete branches**: Removed `jen-almanac-dependencies` and `experimental-updates` branches
+
+---
+
 ## [28/11/2025]
 
 ### Changed
