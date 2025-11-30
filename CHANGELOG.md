@@ -10,7 +10,7 @@ All notable changes to Jen Almanac's Modpack will be documented in this file.
 
 **Complete modular restructuring of the Jen mod from monolithic architecture to organized module system.**
 
-The entire mod has been refactored from a single large `Jen.lua` file (~29,000+ lines) into a clean modular structure for better maintainability, readability, and development workflow.
+The entire mod has been refactored from a single large `Jen.lua` file (~13,000+ lines) into a clean modular structure for better maintainability, readability, and development workflow.
 
 ##### New Directory Structure
 
